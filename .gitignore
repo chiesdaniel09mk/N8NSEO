@@ -1,0 +1,26 @@
+# Entorno y secretos
+.env
+.env.local
+*.pem
+
+# n8n
+n8n_data/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Opcional: blueprints de Make (muy grandes, descomenta si no quieres subirlos)
+# *.blueprint.json

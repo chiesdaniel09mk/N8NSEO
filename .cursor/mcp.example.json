@@ -1,0 +1,15 @@
+﻿{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "cmd.exe",
+      "args": ["/c", "npx", "--yes", "n8n-mcp"],
+      "env": {
+        "MCP_MODE": "stdio",
+        "LOG_LEVEL": "error",
+        "DISABLE_CONSOLE_OUTPUT": "true",
+        "N8N_API_URL": "http://localhost:5678",
+        "N8N_API_KEY": "PEGA_AQUI_TU_NUEVA_API_KEY"
+      }
+    }
+  }
+}

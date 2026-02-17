@@ -1,0 +1,14 @@
+﻿# Codex project config (repo-local)
+# - Este archivo es para "dejar fino" el agente dentro del IDE.
+# - MCP te permite conectar herramientas externas (como n8n-mcp).
+
+[mcp_servers]
+
+[mcp_servers.n8n]
+enabled = true
+# Lanza tu servidor MCP para n8n usando el script que ya tienes
+command = "powershell"
+args = ["-NoProfile","-ExecutionPolicy","Bypass","-File","04_scripts\\run-n8n-mcp.ps1"]
+cwd = "."
+startup_timeout_sec = 25
+tool_timeout_sec = 180
