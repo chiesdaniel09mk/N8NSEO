@@ -1,0 +1,771 @@
+{
+  "name": "Escenario 2 — KW orgánicas (SE Ranking) → cambios → Slack (Make→n8n)",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "ManualTrigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "parameters": {}
+    },
+    {
+      "id": "SheetsMasterGet",
+      "name": "MASTER_SEO_CLIENTES (Get)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [340, 300],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "getAll",
+        "documentId": "={{$env.MASTER_SEO_CLIENTES_ID}}",
+        "sheetName": "={{$env.MASTER_SEO_CLIENTES_SHEET || 'Hoja 1'}}",
+        "options": {
+          "returnAll": true,
+          "includeRowNumber": true
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google (Sheets)"
+        }
+      }
+    },
+    {
+      "id": "CodeFilterClients",
+      "name": "Filtrar clientes (procesar=SI y hora_generado vacío)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [580, 300],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "function norm(v) {\n  return (v ?? \"\").toString().trim();\n}\n\nfunction truthySI(v) {\n  return norm(v).toUpperCase() === \"SI\";\n}\n\nconst out = [];\nfor (const item of items) {\n  const row = item.json;\n  const rowNumber = row.rowNumber ?? row.__rowNumber ?? row.__ROW_NUMBER__;\n\n  const procesar = row.procesar ?? row.PROCESAR;\n  const horaGenerado = row.hora_generado;\n\n  if (!truthySI(procesar)) continue;\n  if (norm(horaGenerado) !== \"\") continue; // ya procesado\n\n  out.push({\n    json: {\n      client: row,\n      masterRowNumber: rowNumber\n    }\n  });\n}\n\nreturn out;\n"
+      }
+    },
+    {
+      "id": "SplitClients",
+      "name": "Iterar clientes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [820, 300],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "SheetsCambiosGet",
+      "name": "CLIENTE (Get) CAMBIOS_KW_ORGANICAS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [1080, 180],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "getAll",
+        "documentId": "={{$json.client.client_sheet_id}}",
+        "sheetName": "CAMBIOS_KW_ORGANICAS",
+        "options": {
+          "returnAll": true
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google (Sheets)"
+        }
+      }
+    },
+    {
+      "id": "SheetsResumenGet",
+      "name": "CLIENTE (Get) ALERTAS_KW_RESUMEN",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [1080, 420],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "getAll",
+        "documentId": "={{$json.client.client_sheet_id}}",
+        "sheetName": "ALERTAS_KW_RESUMEN",
+        "options": {
+          "returnAll": true
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google (Sheets)"
+        }
+      }
+    },
+    {
+      "id": "MergeCambiosResumen",
+      "name": "Merge (cambios + resumen)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1320, 300],
+      "parameters": {
+        "mode": "multiplex"
+      }
+    },
+    {
+      "id": "CodeBuildTexts",
+      "name": "Construir textos Slack (urgentes/top10/resumen)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "function norm(v) {\n  return (v ?? \"\").toString().trim();\n}\n\nfunction toNum(v) {\n  const n = Number(String(v ?? \"\").replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n}\n\nfunction isTrue(v) {\n  const s = norm(v).toUpperCase();\n  return s === \"TRUE\" || s === \"SI\" || s === \"YES\" || s === \"1\";\n}\n\nconst client = $json.client;\n\n// Input 1: CAMBIOS_KW_ORGANICAS rows\nconst cambios = ($input.all(0) ?? []).map(i => i.json);\n// Input 2: ALERTAS_KW_RESUMEN rows\nconst resumenRows = ($input.all(1) ?? []).map(i => i.json);\n\nconst limiteDropAlerta = toNum(client.limite_drop_alerta);\n\nfunction urgentCondition(r) {\n  const estado = norm(r.estado).toUpperCase();\n  const variacion = toNum(r.variacion);\n  if (estado === \"PERDIDA\") return true;\n\n  if (estado === \"BAJA\" && variacion <= (limiteDropAlerta * -1)) {\n    if (isTrue(r.sale_top3) || isTrue(r.sale_top10)) return true;\n  }\n\n  return false;\n}\n\nfunction formatLine(r) {\n  const keyword = norm(r.keyword);\n  const estado = norm(r.estado).toUpperCase();\n  const posPrev = norm(r.pos_prev);\n  const posNow = norm(r.pos_now);\n  const variacion = toNum(r.variacion);\n  const url = norm(r.url) || norm(r.url_now) || norm(r.url_prev);\n\n  if (estado === \"PERDIDA\") {\n    const urlVer = url ? `<${url}|ver URL>` : \"\";\n    return `• *${keyword}* — ⚠️ *PERDIDA* (antes #${posPrev || \"—\"})${urlVer ? \" | \" + urlVer : \"\"}`;\n  }\n\n  const arrow = variacion > 0 ? \"⬆️\" : variacion < 0 ? \"⬇️\" : \"→\";\n  const absVar = Math.abs(variacion);\n  const urlVer = url ? `<${url}|ver URL>` : \"\";\n  return `• *${keyword}* — #${posPrev || \"—\"} → #${posNow || \"—\"} (${arrow} ${absVar})${urlVer ? \" | \" + urlVer : \"\"}`;\n}\n\n// Orden: Make ordena por variacion asc\nconst cambiosSorted = [...cambios].sort((a, b) => toNum(a.variacion) - toNum(b.variacion));\n\nconst urgentes = cambiosSorted.filter(urgentCondition);\nconst urgentesText = urgentes.map(formatLine).join(\"\\n\");\n\nconst top10 = cambiosSorted.filter(r => isTrue(r.sale_top10)).slice(0, 5);\nconst top10Text = top10\n  .map(r => {\n    const keyword = norm(r.keyword);\n    const posPrev = norm(r.pos_prev) || \"—\";\n    const posNow = norm(r.pos_now) || \"—\";\n    const url = norm(r.url) || norm(r.url_now) || norm(r.url_prev);\n    const urlVer = url ? `<${url}|ver>` : \"\";\n    return `• *${keyword}* (#${posPrev} → #${posNow})${urlVer ? \" | \" + urlVer : \"\"}`;\n  })\n  .join(\"\\n\");\n\nconst resumenSlackRow = resumenRows.find(r => norm(r.metrica).toLowerCase() === \"mensaje slack\");\nconst resumenValor = resumenSlackRow ? norm(resumenSlackRow.valor) : \"\";\n\nconst tz = norm(client.zona_horario) || \"Europe/Madrid\";\nconst fecha = new Date().toLocaleDateString(\"sv-SE\", { timeZone: tz }); // YYYY-MM-DD\n\nconst sheetId = norm(client.client_sheet_id);\nconst sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : norm(client.enlace_hoja_cliente);\n\nconst mentionUrgent = norm(client.slack_mencion_urgent);\n\nconst textoResumenCentral = `📊 *Resumen KW orgánicas* (${fecha})\\n🏷️ *Cliente:* ${norm(client.client_name)} | 🌐 ${norm(client.domain)}\\n📣 *Canal cliente:* <#${norm(client.slack_canal_cliente_id)}>\\n📌 *Abrir hoja:* <${sheetUrl}|Google Sheet del cliente>\\n\\n${resumenValor}`;\n\nconst textoResumenCliente = `📊 *Resumen KW orgánicas* (${fecha})\\n\\n${resumenValor}\\n\\n🔎 <${sheetUrl}|Abrir hoja del cliente>`;\n\nconst textoUrgentesCliente = `${mentionUrgent ? mentionUrgent + \" \" : \"\"}🚨 *KW orgánicas — URGENTES* (${fecha})\\n🏷️ ${norm(client.client_name)} | 🌐 ${norm(client.domain)}\\n📌 *Acceso hoja*: <${sheetUrl}|Abrir Google Sheet>\\n\\n${urgentesText}\\n\\n📉 *Salen del TOP10 (muestra 5)*\\n${top10Text}\\n_(Hay más resultados en el Google Sheet)_\\n\\n📌 *Acceso rápido*\\n• <${sheetUrl}|Abrir Google Sheet del cliente>\\n• Pestañas: *ALERTAS_KW_URGENTES* / *ALERTAS_KW_RESUMEN*`;\n\nreturn [\n  {\n    json: {\n      ...$json,\n      tz,\n      fecha,\n      sheetUrl,\n      resumenValor,\n      urgentesCount: urgentes.length,\n      urgentesText,\n      top10Text,\n      slackTextResumenCentral: textoResumenCentral,\n      slackTextResumenCliente: textoResumenCliente,\n      slackTextUrgentesCliente: textoUrgentesCliente\n    }\n  }\n];\n"
+      }
+    },
+    {
+      "id": "IfHasClientChannelId",
+      "name": "¿Tiene slack_canal_cliente_id?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1800, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.client.slack_canal_cliente_id}}",
+              "operation": "notEmpty"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "HttpSlackListChannels",
+      "name": "Slack API: conversations.list",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2040, 440],
+      "parameters": {
+        "method": "GET",
+        "url": "https://slack.com/api/conversations.list",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.SLACK_BOT_TOKEN}}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "1000"
+            },
+            {
+              "name": "types",
+              "value": "public_channel,private_channel"
+            },
+            {
+              "name": "exclude_archived",
+              "value": "true"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "CodeFindOrDeriveChannel",
+      "name": "Resolver canal cliente (find/create name)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2280, 440],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "function norm(v) {\n  return (v ?? \"\").toString().trim();\n}\n\nfunction sanitizeChannelName(name) {\n  // Slack: lowercase, números, guiones, <= 80 chars\n  return norm(name)\n    .toLowerCase()\n    .replace(/^#/, \"\")\n    .replace(/\\s+/g, \"-\")\n    .replace(/[^a-z0-9-_]/g, \"-\")\n    .replace(/-+/g, \"-\")\n    .replace(/^[-_]+|[-_]+$/g, \"\")\n    .slice(0, 80) || \"seo-alerts\";\n}\n\nconst client = $json.client;\nconst desiredName = sanitizeChannelName(client.slack_canal_cliente || client.client_name || client.domain);\n\n// Respuesta Slack\nconst channels = ($json.channels || $json?.data?.channels || []).map(c => ({\n  id: c.id,\n  name: c.name\n}));\n\nconst found = channels.find(c => (c.name || \"\").toLowerCase() === desiredName.toLowerCase());\n\nreturn [\n  {\n    json: {\n      ...$json,\n      desiredChannelName: desiredName,\n      resolvedClientChannelId: found ? found.id : \"\",\n      resolvedClientChannelExists: !!found\n    }\n  }\n];\n"
+      }
+    },
+    {
+      "id": "IfChannelFound",
+      "name": "¿Canal existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2520, 440],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.resolvedClientChannelExists === true}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "HttpSlackCreateChannel",
+      "name": "Slack API: conversations.create",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2760, 560],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/conversations.create",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.SLACK_BOT_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{$json.desiredChannelName}}"
+            },
+            {
+              "name": "is_private",
+              "value": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "CodePickCreatedChannelId",
+      "name": "Guardar channel_id creado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3000, 560],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "const ch = $json.channel;\nreturn [\n  {\n    json: {\n      ...$json,\n      resolvedClientChannelId: ch?.id || \"\",\n      resolvedClientChannelExists: true\n    }\n  }\n];\n"
+      }
+    },
+    {
+      "id": "HttpSlackSetPurpose",
+      "name": "Slack API: conversations.setPurpose",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3240, 560],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/conversations.setPurpose",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.SLACK_BOT_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{$json.resolvedClientChannelId}}"
+            },
+            {
+              "name": "purpose",
+              "value": "={{'Canal de alertas automáticas SEO — ' + $json.client.client_name + ' (' + $json.client.domain + ')\\n• Escenario: KW orgánicas (SE Ranking)\\n• Hoja: ' + $json.sheetUrl}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "SheetsUpdateClientChannelId",
+      "name": "MASTER (Update) slack_canal_cliente_id",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [2760, 360],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": "={{$env.MASTER_SEO_CLIENTES_ID}}",
+        "sheetName": "={{$env.MASTER_SEO_CLIENTES_SHEET || 'Hoja 1'}}",
+        "options": {},
+        "updateKey": "rowNumber",
+        "keyRow": 0,
+        "columns": [
+          "slack_canal_cliente_id"
+        ],
+        "schema": {
+          "slack_canal_cliente_id": "={{$json.resolvedClientChannelId}}"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google (Sheets)"
+        }
+      }
+    },
+    {
+      "id": "SetApplyResolvedChannelId",
+      "name": "Aplicar resolvedClientChannelId → client",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [3000, 360],
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "client.slack_canal_cliente_id",
+              "value": "={{$json.resolvedClientChannelId}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "SlackPostResumenCentral",
+      "name": "Slack: RESUMEN → canal central",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2040, 180],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.SLACK_BOT_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{$json.client.slack_canal_central_id || $env.SLACK_CENTRAL_CHANNEL_ID}}"
+            },
+            {
+              "name": "text",
+              "value": "={{$json.slackTextResumenCentral}}"
+            },
+            {
+              "name": "mrkdwn",
+              "value": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "SlackPostResumenCliente",
+      "name": "Slack: RESUMEN → canal cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2280, 180],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.SLACK_BOT_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{$json.client.slack_canal_cliente_id}}"
+            },
+            {
+              "name": "text",
+              "value": "={{$json.slackTextResumenCliente}}"
+            },
+            {
+              "name": "mrkdwn",
+              "value": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "IfHasUrgentes",
+      "name": "¿Hay urgentes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2520, 180],
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.urgentesCount}}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "SlackPostUrgentesCliente",
+      "name": "Slack: URGENTES → canal cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2760, 180],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{'Bearer ' + $env.SLACK_BOT_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{$json.client.slack_canal_cliente_id}}"
+            },
+            {
+              "name": "text",
+              "value": "={{$json.slackTextUrgentesCliente}}"
+            },
+            {
+              "name": "mrkdwn",
+              "value": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "SheetsMasterSetHora",
+      "name": "MASTER (Update) hora_generado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [3000, 300],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": "={{$env.MASTER_SEO_CLIENTES_ID}}",
+        "sheetName": "={{$env.MASTER_SEO_CLIENTES_SHEET || 'Hoja 1'}}",
+        "options": {},
+        "updateKey": "rowNumber",
+        "keyRow": 0,
+        "columns": [
+          "hora_generado"
+        ],
+        "schema": {
+          "hora_generado": "={{$now.toFormat('yyyy-LL-dd HH:mm')}}"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google (Sheets)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "MASTER_SEO_CLIENTES (Get)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MASTER_SEO_CLIENTES (Get)": {
+      "main": [
+        [
+          {
+            "node": "Filtrar clientes (procesar=SI y hora_generado vacío)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar clientes (procesar=SI y hora_generado vacío)": {
+      "main": [
+        [
+          {
+            "node": "Iterar clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Iterar clientes": {
+      "main": [
+        [
+          {
+            "node": "CLIENTE (Get) CAMBIOS_KW_ORGANICAS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CLIENTE (Get) ALERTAS_KW_RESUMEN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CLIENTE (Get) CAMBIOS_KW_ORGANICAS": {
+      "main": [
+        [
+          {
+            "node": "Merge (cambios + resumen)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CLIENTE (Get) ALERTAS_KW_RESUMEN": {
+      "main": [
+        [
+          {
+            "node": "Merge (cambios + resumen)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge (cambios + resumen)": {
+      "main": [
+        [
+          {
+            "node": "Construir textos Slack (urgentes/top10/resumen)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir textos Slack (urgentes/top10/resumen)": {
+      "main": [
+        [
+          {
+            "node": "¿Tiene slack_canal_cliente_id?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Tiene slack_canal_cliente_id?": {
+      "main": [
+        [
+          {
+            "node": "Slack: RESUMEN → canal central",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack API: conversations.list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack API: conversations.list": {
+      "main": [
+        [
+          {
+            "node": "Resolver canal cliente (find/create name)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver canal cliente (find/create name)": {
+      "main": [
+        [
+          {
+            "node": "¿Canal existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Canal existe?": {
+      "main": [
+        [
+          {
+            "node": "MASTER (Update) slack_canal_cliente_id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack API: conversations.create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack API: conversations.create": {
+      "main": [
+        [
+          {
+            "node": "Guardar channel_id creado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar channel_id creado": {
+      "main": [
+        [
+          {
+            "node": "Slack API: conversations.setPurpose",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "MASTER (Update) slack_canal_cliente_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MASTER (Update) slack_canal_cliente_id": {
+      "main": [
+        [
+          {
+            "node": "Aplicar resolvedClientChannelId → client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aplicar resolvedClientChannelId → client": {
+      "main": [
+        [
+          {
+            "node": "Slack: RESUMEN → canal central",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: RESUMEN → canal central": {
+      "main": [
+        [
+          {
+            "node": "Slack: RESUMEN → canal cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: RESUMEN → canal cliente": {
+      "main": [
+        [
+          {
+            "node": "¿Hay urgentes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay urgentes?": {
+      "main": [
+        [
+          {
+            "node": "Slack: URGENTES → canal cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MASTER (Update) hora_generado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: URGENTES → canal cliente": {
+      "main": [
+        [
+          {
+            "node": "MASTER (Update) hora_generado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MASTER (Update) hora_generado": {
+      "main": [
+        [
+          {
+            "node": "Iterar clientes",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  }
+}
+

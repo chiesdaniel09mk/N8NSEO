@@ -24,3 +24,6 @@ logs/
 
 # Opcional: blueprints de Make (muy grandes, descomenta si no quieres subirlos)
 # *.blueprint.json
+deploy/n8n/.env
+secrets/
+.cursor/mcp.json
