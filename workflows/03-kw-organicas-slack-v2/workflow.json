@@ -1,0 +1,1140 @@
+{
+    "name":  "S03 - KW Organicas Slack V2",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "content":  "## 🟢 TRIGGER\nInicia manualmente para test.\nEn producción usa un Schedule Trigger (ej. diario a las 9h).",
+                                         "height":  120,
+                                         "width":  200,
+                                         "color":  5
+                                     },
+                      "id":  "SN01",
+                      "name":  "Sticky Note SN01",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       60,
+                                       140
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 📋 MASTER (lectura)\nLee **TODAS** las filas de `MASTER_SEO_CLIENTES`.\n\n**Env var necesaria:**\n`MASTER_SEO_CLIENTES_ID`",
+                                         "height":  180,
+                                         "width":  220,
+                                         "color":  7
+                                     },
+                      "id":  "SN02",
+                      "name":  "Sticky Note SN02",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       300,
+                                       140
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 🔍 FILTRA CLIENTES\nSelecciona filas con `procesar=SI`\ny `hora_generado` que NO sea\nde este mes (anti-duplicado).\n\nUsa `timezone` del cliente.",
+                                         "height":  200,
+                                         "width":  220,
+                                         "color":  4
+                                     },
+                      "id":  "SN03",
+                      "name":  "Sticky Note SN03",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       540,
+                                       120
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## ❓ ¿HAY CLIENTES?\nSi no hay nadie elegible\neste mes → termina limpio.\nSin error.",
+                                         "height":  160,
+                                         "width":  200,
+                                         "color":  4
+                                     },
+                      "id":  "SN04",
+                      "name":  "Sticky Note SN04",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       780,
+                                       120
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 🔄 ITERA 1 A 1\n`splitInBatches` con batchSize=1.\nSalida 0 = procesar cliente.\nSalida 1 = fin del bucle.",
+                                         "height":  160,
+                                         "width":  200,
+                                         "color":  7
+                                     },
+                      "id":  "SN05",
+                      "name":  "Sticky Note SN05",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1020,
+                                       120
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 📊 CAMBIOS KW\nLee pestaña `CAMBIOS_KW_ORGANICAS`\ndel sheet del cliente.\n\nColumnas clave:\n`keyword, pos_prev, pos_now,\nvariacion, estado, sale_top3,\nsale_top10, url_prev, url_now`",
+                                         "height":  180,
+                                         "width":  220,
+                                         "color":  7
+                                     },
+                      "id":  "SN06",
+                      "name":  "Sticky Note SN06",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1260,
+                                       120
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 🔨 CONSTRUYE TEXTOS\nGenera los 3 textos Slack:\n- `slackTextResumenCentral`\n- `slackTextUrgentesCliente`\n\n**Criterios URGENTE:**\n1. `estado=PERDIDA`\n2. `BAJA + drop \u003e umbral + top3`\n3. `BAJA + drop \u003e umbral + top10`",
+                                         "height":  220,
+                                         "width":  240,
+                                         "color":  6
+                                     },
+                      "id":  "SN07",
+                      "name":  "Sticky Note SN07",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1500,
+                                       100
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## ❓ ¿TIENE ID CANAL?\nSi MASTER ya tiene\n`slack_canal_cliente_id`\n→ usa directamente.\n\nSi no → resuelve por nombre\n(lista canales Slack).",
+                                         "height":  200,
+                                         "width":  220,
+                                         "color":  4
+                                     },
+                      "id":  "SN08",
+                      "name":  "Sticky Note SN08",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1740,
+                                       120
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 📋 LISTA CANALES\nLlama a `conversations.list`\n(hasta 1000 canales).\n\n**Env var:**\n`SLACK_BOT_TOKEN`",
+                                         "height":  180,
+                                         "width":  240,
+                                         "color":  7
+                                     },
+                      "id":  "SN09",
+                      "name":  "Sticky Note SN09",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1980,
+                                       370
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 🔍 BUSCA POR NOMBRE\nCompara nombres normalizados\n(sin `#`, minúsculas).\nDevuelve ID si existe.",
+                                         "height":  180,
+                                         "width":  240,
+                                         "color":  7
+                                     },
+                      "id":  "SN10",
+                      "name":  "Sticky Note SN10",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2220,
+                                       370
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## ❓ ¿CANAL EXISTE?\nSí → guarda ID en MASTER.\nNo → crea el canal.",
+                                         "height":  160,
+                                         "width":  200,
+                                         "color":  4
+                                     },
+                      "id":  "SN11",
+                      "name":  "Sticky Note SN11",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2460,
+                                       370
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 🆕 CREA CANAL\nCrea canal público en Slack\ncon nombre normalizado.\nSi falla permisos → `continueOnFail`.",
+                                         "height":  180,
+                                         "width":  220,
+                                         "color":  7
+                                     },
+                      "id":  "SN12",
+                      "name":  "Sticky Note SN12",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2700,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 💾 GUARDA ID CREADO\nExtrae el `id` del canal\nrecién creado.",
+                                         "height":  160,
+                                         "width":  220,
+                                         "color":  7
+                                     },
+                      "id":  "SN13",
+                      "name":  "Sticky Note SN13",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2940,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 📌 SET PURPOSE\nPone descripción al canal nuevo:\nclient_name + domain + link sheet.",
+                                         "height":  180,
+                                         "width":  220,
+                                         "color":  7
+                                     },
+                      "id":  "SN14",
+                      "name":  "Sticky Note SN14",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       3180,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## ✏️ GUARDA ID EN MASTER\nEscribe `slack_canal_cliente_id`\nen MASTER para no resolver\nla próxima vez.\n\n⚠️ Configura columna en UI si no existe.",
+                                         "height":  180,
+                                         "width":  240,
+                                         "color":  6
+                                     },
+                      "id":  "SN15",
+                      "name":  "Sticky Note SN15",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2700,
+                                       340
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 🔗 APLICA ID RESUELTO\nPropaga el `resolvedClientChannelId`\ncomo `client.slack_canal_cliente_id`.",
+                                         "height":  160,
+                                         "width":  220,
+                                         "color":  7
+                                     },
+                      "id":  "SN16",
+                      "name":  "Sticky Note SN16",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2940,
+                                       340
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 📤 RESUMEN → CENTRAL\nEnvía resumen al canal central.\n\n**Env var:**\n`SLACK_CENTRAL_CHANNEL_ID`\n\nSiempre se envía.",
+                                         "height":  180,
+                                         "width":  240,
+                                         "color":  5
+                                     },
+                      "id":  "SN17",
+                      "name":  "Sticky Note SN17",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1980,
+                                       -20
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## ❓ ¿HAY URGENTES/TOP10?\nSolo envía al cliente si hay\nKWs urgentes o salidas Top10.\nEvita mensajes vacíos.",
+                                         "height":  160,
+                                         "width":  200,
+                                         "color":  4
+                                     },
+                      "id":  "SN18",
+                      "name":  "Sticky Note SN18",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2220,
+                                       -20
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## 🚨 URGENTES → CLIENTE\nEnvía a canal del cliente:\n- Listado urgentes\n- Top10 que salen\n- Links rápidos\n\nUsa mención `slack_mention_urgent`\nsi está configurada.",
+                                         "height":  200,
+                                         "width":  240,
+                                         "color":  2
+                                     },
+                      "id":  "SN19",
+                      "name":  "Sticky Note SN19",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2460,
+                                       -20
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## ✅ MARCA EJECUTADO\nEscribe `hora_generado` en MASTER\ncon fecha+hora actual (timezone cliente).\n\nEvita re-ejecutar este mes.\n⚠️ Bug Make corregido: usa `timezone`, no `hora_generado`.",
+                                         "height":  180,
+                                         "width":  240,
+                                         "color":  5
+                                     },
+                      "id":  "SN20",
+                      "name":  "Sticky Note SN20",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2700,
+                                       -20
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## ➡️ SIGUIENTE CLIENTE\nVuelve al bucle para\nprocesar el siguiente.\nSi no quedan, termina.",
+                                         "height":  140,
+                                         "width":  200,
+                                         "color":  7
+                                     },
+                      "id":  "SN21",
+                      "name":  "Sticky Note SN21",
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2940,
+                                       -20
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "ManualTrigger",
+                      "name":  "Manual Trigger",
+                      "type":  "n8n-nodes-base.manualTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       100,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "documentId":  "={{$env.MASTER_SEO_CLIENTES_ID}}",
+                                         "sheetName":  "={{$env.MASTER_SEO_CLIENTES_SHEET || \u0027Hoja 1\u0027}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "SheetsMasterGet",
+                      "name":  "MASTER_SEO_CLIENTES (Get)",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       340,
+                                       300
+                                   ],
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "language":  "JavaScript",
+                                         "jsCode":  "// Filtra clientes con procesar=SI cuyo hora_generado NO sea de este mes.\n// Envuelve cada cliente en {client, __tz, __sheetUrl} para los nodos siguientes.\nconst { DateTime } = require(\u0027luxon\u0027);\n\nconst eligible = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  const procesar = (row.procesar || \u0027\u0027).toString().trim()\n    .toUpperCase().normalize(\u0027NFD\u0027).replace(/[\\u0300-\\u036f]/g, \u0027\u0027);\n  if (procesar !== \u0027SI\u0027) continue;\n\n  const tz = (row.timezone || \u0027Europe/Madrid\u0027).toString().trim() || \u0027Europe/Madrid\u0027;\n  const horaGenerado = (row.hora_generado || \u0027\u0027).toString().trim();\n\n  if (horaGenerado) {\n    let last = DateTime.fromISO(horaGenerado, { zone: tz });\n    if (!last.isValid) last = DateTime.fromFormat(horaGenerado, \u0027yyyy-MM-dd HH:mm\u0027, { zone: tz });\n    if (!last.isValid) last = DateTime.fromFormat(horaGenerado, \u0027dd/MM/yyyy HH:mm\u0027, { zone: tz });\n    if (last.isValid) {\n      const nowMonth = DateTime.now().setZone(tz).toFormat(\u0027yyyy-MM\u0027);\n      if (last.toFormat(\u0027yyyy-MM\u0027) === nowMonth) continue; // Ya ejecutado este mes\n    }\n  }\n\n  eligible.push({\n    json: {\n      client: row,\n      __tz: tz,\n      __sheetUrl: `https://docs.google.com/spreadsheets/d/${row.client_sheet_id}/edit`\n    }\n  });\n}\n\nreturn eligible;"
+                                     },
+                      "id":  "CodeFilterClients",
+                      "name":  "Filtrar clientes (procesar=SI y no ejecutado este mes)",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       580,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "number":  [
+                                                                           {
+                                                                               "value1":  "={{$input.all().length}}",
+                                                                               "operation":  "larger",
+                                                                               "value2":  0
+                                                                           }
+                                                                       ]
+                                                        }
+                                     },
+                      "id":  "IfHayClientes",
+                      "name":  "¿Hay clientes elegibles?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       820,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "NoOpTerminar",
+                      "name":  "Sin clientes este mes (fin)",
+                      "type":  "n8n-nodes-base.noOp",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1060,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "batchSize":  1,
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "SplitClients",
+                      "name":  "Iterar clientes",
+                      "type":  "n8n-nodes-base.splitInBatches",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1060,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "documentId":  "={{$json.client.client_sheet_id}}",
+                                         "sheetName":  "CAMBIOS_KW_ORGANICAS",
+                                         "options":  {
+                                                         "returnAll":  true
+                                                     }
+                                     },
+                      "id":  "SheetsCambiosGet",
+                      "name":  "CLIENTE (Get) CAMBIOS_KW_ORGANICAS",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       1300,
+                                       300
+                                   ],
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "language":  "JavaScript",
+                                         "jsCode":  "// Genera los 3 textos Slack a partir de las filas de CAMBIOS_KW_ORGANICAS.\n// Criterios URGENTE (OR):\n//   1) estado = PERDIDA\n//   2) estado = BAJA + variacion \u003c= -threshold_drop_alert + sale_top3 = TRUE\n//   3) estado = BAJA + variacion \u003c= -threshold_drop_alert + sale_top10 = TRUE\nconst { DateTime } = require(\u0027luxon\u0027);\n\n// Datos del cliente (del nodo SplitInBatches)\nconst clientItem = $(\u0027Iterar clientes\u0027).first().json;\nconst client = clientItem.client;\nconst tz = clientItem.__tz || \u0027Europe/Madrid\u0027;\nconst sheetUrl = clientItem.__sheetUrl || \u0027\u0027;\n\n// Filas de CAMBIOS_KW_ORGANICAS\nconst rows = $input.all().map(i =\u003e i.json).filter(r =\u003e r \u0026\u0026 r.keyword);\n\nconst toBool = v =\u003e [\u0027true\u0027,\u00271\u0027,\u0027yes\u0027,\u0027si\u0027,\u0027sí\u0027,\u0027y\u0027].includes((v??\u0027\u0027).toString().trim().toLowerCase()) || v === true;\nconst toNum  = v =\u003e { const n = Number((v??\u0027\u0027).toString().trim().replace(\u0027,\u0027,\u0027.\u0027)); return Number.isFinite(n) ? n : null; };\n\nconst threshAlert  = toNum(client.threshold_drop_alert)  ?? 3;\nconst threshUrgent = toNum(client.threshold_drop_urgent) ?? 10;\n\nconst changes = rows.map(r =\u003e ({\n  ...r,\n  variacion:  toNum(r.variacion),\n  sale_top3:  toBool(r.sale_top3),\n  sale_top10: toBool(r.sale_top10),\n  estado: (r.estado || \u0027\u0027).toString().trim().toUpperCase()\n}));\n\nconst drops      = changes.filter(c =\u003e c.variacion !== null \u0026\u0026 c.variacion \u003c 0);\nconst ups        = changes.filter(c =\u003e c.variacion !== null \u0026\u0026 c.variacion \u003e 0);\nconst top3Exits  = changes.filter(c =\u003e c.sale_top3);\nconst top10Exits = changes.filter(c =\u003e c.sale_top10);\n\nconst urgentes = changes.filter(c =\u003e {\n  if (c.estado === \u0027PERDIDA\u0027) return true;\n  if (c.estado === \u0027BAJA\u0027 \u0026\u0026 c.variacion !== null \u0026\u0026 c.variacion \u003c= -threshAlert) {\n    if (c.sale_top3 || c.sale_top10) return true;\n  }\n  return false;\n}).sort((a, b) =\u003e (a.variacion ?? 0) - (b.variacion ?? 0));\n\nconst top10Para = [...top10Exits].sort((a,b) =\u003e (a.variacion??0)-(b.variacion??0)).slice(0,5);\n\nconst fmtMove = m =\u003e m === null ? \u0027\u0027 : (m \u003e 0 ? `⬆️ +${m}` : m \u003c 0 ? `⬇️ ${m}` : `→ 0`);\n\nconst lineUrg = c =\u003e {\n  const url = c.url_now || c.url_prev || \u0027\u0027;\n  const urlPart = url ? ` | \u003c${url}|ver URL\u003e` : \u0027\u0027;\n  if (c.estado === \u0027PERDIDA\u0027)\n    return `• *${c.keyword}* — ⚠️ *PERDIDA* (antes #${c.pos_prev})${urlPart}`;\n  return `• *${c.keyword}* — #${c.pos_prev} → #${c.pos_now} (${fmtMove(c.variacion)})${urlPart}`;\n};\nconst lineTop10 = c =\u003e {\n  const url = c.url_now || c.url_prev || \u0027\u0027;\n  return `• *${c.keyword}* (#${c.pos_prev} → #${c.pos_now}) | \u003c${url}|ver\u003e`;\n};\n\nconst dateStr   = DateTime.now().setZone(tz).toFormat(\u0027yyyy-MM-dd\u0027);\nconst mention   = client.slack_mention_urgent ? `${client.slack_mention_urgent} ` : \u0027\u0027;\nconst urgLines  = urgentes.slice(0,10).map(lineUrg).join(\u0027\\n\u0027);\nconst top10Lines= top10Para.map(lineTop10).join(\u0027\\n\u0027);\nconst canalRef  = client.slack_canal_cliente_id ? `\u003c#${client.slack_canal_cliente_id}\u003e` : `#${(client.slack_channel_cliente||\u0027\u0027).replace(\u0027#\u0027,\u0027\u0027)}`;\n\nconst slackTextResumenCentral =\n`📊 *Resumen KW orgánicas* (${dateStr})\n🏷️ *Cliente:* ${client.client_name||\u0027\u0027} | 🌐 ${client.domain||\u0027\u0027}\n📣 *Canal cliente:* ${canalRef}\n📌 *Abrir hoja:* \u003c${sheetUrl}|Google Sheet del cliente\u003e\n\n• Cambios totales: *${changes.length}*\n• Caídas: *${drops.length}* | Subidas: *${ups.length}*\n• Salidas Top3: *${top3Exits.length}* | Salidas Top10: *${top10Exits.length}*`;\n\nconst slackTextUrgentesCliente = (urgentes.length || top10Exits.length) ?\n`${mention}🚨 *KW orgánicas — URGENTES* (${dateStr})\n🏷️ ${client.client_name||\u0027\u0027} | 🌐 ${client.domain||\u0027\u0027}\n📌 *Acceso hoja:* \u003c${sheetUrl}|Abrir Google Sheet\u003e\n\n${urgentes.length ? `*🔴 Urgentes (${urgentes.length}):*\\n${urgLines}` : \u0027\u0027}\n${top10Exits.length ? `\\n📉 *Salen del TOP10 (muestra ${top10Para.length}):*\\n${top10Lines}\\n_(Hay más resultados en el Google Sheet)_` : \u0027\u0027}\n\n📌 *Acceso rápido*\n• \u003c${sheetUrl}|Abrir Google Sheet del cliente\u003e\n• Pestañas: *CAMBIOS_KW_ORGANICAS* / *ALERTAS_KW_URGENTES*` : \u0027\u0027;\n\nreturn [{\n  json: {\n    client,\n    __tz: tz,\n    __sheetUrl: sheetUrl,\n    slackTextResumenCentral,\n    slackTextUrgentesCliente,\n    urgentesCount:  urgentes.length,\n    top10Count:     top10Exits.length,\n  }\n}];"
+                                     },
+                      "id":  "CodeBuildTexts",
+                      "name":  "Construir textos Slack (urgentes/top10/resumen)",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1540,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "string":  [
+                                                                           {
+                                                                               "value1":  "={{$json.client.slack_canal_cliente_id}}",
+                                                                               "operation":  "notEmpty"
+                                                                           }
+                                                                       ]
+                                                        }
+                                     },
+                      "id":  "IfHasClientChannelId",
+                      "name":  "¿Tiene slack_canal_cliente_id?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1780,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://slack.com/api/conversations.list",
+                                         "sendQuery":  true,
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "name":  "limit",
+                                                                                        "value":  "1000"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "types",
+                                                                                        "value":  "public_channel,private_channel"
+                                                                                    },
+                                                                                    {
+                                                                                        "name":  "exclude_archived",
+                                                                                        "value":  "true"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{\u0027Bearer \u0027 + $env.SLACK_BOT_TOKEN}}"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "HttpSlackListChannels",
+                      "name":  "Slack API: conversations.list",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       2020,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "language":  "JavaScript",
+                                         "jsCode":  "// Busca el canal del cliente en la lista de Slack por nombre (sin #, case-insensitive).\n// Si lo encuentra, devuelve su ID. Si no, devuelve null para crearlo.\nconst clientItem = $(\u0027Construir textos Slack (urgentes/top10/resumen)\u0027).first().json;\nconst canales    = $input.all().map(i =\u003e i.json).filter(c =\u003e c.id \u0026\u0026 c.name);\n\nconst norm = s =\u003e (s||\u0027\u0027).toString().trim().replace(/^#/,\u0027\u0027).toLowerCase().replace(/\\s+/g,\u0027-\u0027);\nconst desiredName = norm(clientItem.client.slack_channel_cliente || clientItem.client.slack_canal_cliente);\n\nconst encontrado = canales.find(c =\u003e norm(c.name) === desiredName);\n\nreturn [{\n  json: {\n    ...clientItem,\n    desiredChannelName:          desiredName,\n    resolvedClientChannelId:     encontrado ? encontrado.id : null,\n    resolvedClientChannelExists: !!encontrado,\n  }\n}];"
+                                     },
+                      "id":  "CodeFindOrDeriveChannel",
+                      "name":  "Resolver canal cliente (buscar o crear)",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2260,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.resolvedClientChannelExists === true}}"
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "IfChannelFound",
+                      "name":  "¿Canal cliente existe en Slack?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2500,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "documentId":  "={{$env.MASTER_SEO_CLIENTES_ID}}",
+                                         "sheetName":  "={{$env.MASTER_SEO_CLIENTES_SHEET || \u0027Hoja 1\u0027}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "SheetsUpdateClientChannelId",
+                      "name":  "MASTER (Update) slack_canal_cliente_id",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       2740,
+                                       500
+                                   ],
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/conversations.create",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{\u0027Bearer \u0027 + $env.SLACK_BOT_TOKEN}}"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json; charset=utf-8"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "name",
+                                                                                       "value":  "={{$json.desiredChannelName}}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "is_private",
+                                                                                       "value":  "false"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "HttpSlackCreateChannel",
+                      "name":  "Slack API: conversations.create",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       2740,
+                                       680
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "language":  "JavaScript",
+                                         "jsCode":  "// Extrae el ID del canal recién creado por la API de Slack.\nconst prev    = $(\u0027Resolver canal cliente (buscar o crear)\u0027).first().json;\nconst created = $input.first().json;\nconst newId   = created?.id || created?.channel?.id || null;\n\nreturn [{\n  json: {\n    ...prev,\n    resolvedClientChannelId:     newId,\n    resolvedClientChannelExists: !!newId,\n  }\n}];"
+                                     },
+                      "id":  "CodePickCreatedChannelId",
+                      "name":  "Guardar channel_id creado",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2980,
+                                       680
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/conversations.setPurpose",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{\u0027Bearer \u0027 + $env.SLACK_BOT_TOKEN}}"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json; charset=utf-8"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "channel",
+                                                                                       "value":  "={{$json.resolvedClientChannelId}}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "purpose",
+                                                                                       "value":  "={{\u0027Canal alertas SEO automáticas — \u0027 + $json.client.client_name + \u0027 (\u0027 + $json.client.domain + \u0027)\\n• Escenario: KW orgánicas (SE Ranking)\\n• Hoja: \u0027 + $json.__sheetUrl}}"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "HttpSlackSetPurpose",
+                      "name":  "Slack API: conversations.setPurpose",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       3220,
+                                       680
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "values":  {
+                                                        "string":  [
+                                                                       {
+                                                                           "name":  "client.slack_canal_cliente_id",
+                                                                           "value":  "={{$json.resolvedClientChannelId}}"
+                                                                       }
+                                                                   ]
+                                                    },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "SetApplyResolvedChannelId",
+                      "name":  "Aplicar resolvedClientChannelId → client",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2980,
+                                       500
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/chat.postMessage",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{\u0027Bearer \u0027 + $env.SLACK_BOT_TOKEN}}"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json; charset=utf-8"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "channel",
+                                                                                       "value":  "={{$json.client.slack_canal_central_id || $env.SLACK_CENTRAL_CHANNEL_ID}}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "text",
+                                                                                       "value":  "={{$json.slackTextResumenCentral}}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "mrkdwn",
+                                                                                       "value":  "true"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "SlackPostResumenCentral",
+                      "name":  "Slack: RESUMEN → canal central",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       2020,
+                                       160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "number":  [
+                                                                           {
+                                                                               "value1":  "={{$json.urgentesCount + $json.top10Count}}",
+                                                                               "operation":  "larger",
+                                                                               "value2":  0
+                                                                           }
+                                                                       ]
+                                                        }
+                                     },
+                      "id":  "IfHasUrgentes",
+                      "name":  "¿Hay urgentes o Top10?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2260,
+                                       160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/chat.postMessage",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{\u0027Bearer \u0027 + $env.SLACK_BOT_TOKEN}}"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json; charset=utf-8"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "channel",
+                                                                                       "value":  "={{$json.client.slack_canal_cliente_id || $json.resolvedClientChannelId}}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "text",
+                                                                                       "value":  "={{$json.slackTextUrgentesCliente}}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "mrkdwn",
+                                                                                       "value":  "true"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "SlackPostUrgentesCliente",
+                      "name":  "Slack: URGENTES → canal cliente",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       2500,
+                                       160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "documentId":  "={{$env.MASTER_SEO_CLIENTES_ID}}",
+                                         "sheetName":  "={{$env.MASTER_SEO_CLIENTES_SHEET || \u0027Hoja 1\u0027}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "SheetsMasterSetHora",
+                      "name":  "MASTER (Update) hora_generado",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       2740,
+                                       160
+                                   ],
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "NextBatch",
+                      "name":  "Siguiente cliente (next batch)",
+                      "type":  "n8n-nodes-base.noOp",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2980,
+                                       160
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Manual Trigger":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "MASTER_SEO_CLIENTES (Get)",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "MASTER_SEO_CLIENTES (Get)":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Filtrar clientes (procesar=SI y no ejecutado este mes)",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Filtrar clientes (procesar=SI y no ejecutado este mes)":  {
+                                                                                       "main":  [
+                                                                                                    [
+                                                                                                        {
+                                                                                                            "node":  "¿Hay clientes elegibles?",
+                                                                                                            "type":  "main",
+                                                                                                            "index":  0
+                                                                                                        }
+                                                                                                    ]
+                                                                                                ]
+                                                                                   },
+                        "¿Hay clientes elegibles?":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Iterar clientes",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ],
+                                                                      [
+                                                                          {
+                                                                              "node":  "Sin clientes este mes (fin)",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Iterar clientes":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "CLIENTE (Get) CAMBIOS_KW_ORGANICAS",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "CLIENTE (Get) CAMBIOS_KW_ORGANICAS":  {
+                                                                   "main":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Construir textos Slack (urgentes/top10/resumen)",
+                                                                                        "type":  "main",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                               },
+                        "Construir textos Slack (urgentes/top10/resumen)":  {
+                                                                                "main":  [
+                                                                                             [
+                                                                                                 {
+                                                                                                     "node":  "¿Tiene slack_canal_cliente_id?",
+                                                                                                     "type":  "main",
+                                                                                                     "index":  0
+                                                                                                 }
+                                                                                             ]
+                                                                                         ]
+                                                                            },
+                        "¿Tiene slack_canal_cliente_id?":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Slack: RESUMEN → canal central",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ],
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Slack API: conversations.list",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                        "Slack API: conversations.list":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Resolver canal cliente (buscar o crear)",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Resolver canal cliente (buscar o crear)":  {
+                                                                        "main":  [
+                                                                                     [
+                                                                                         {
+                                                                                             "node":  "¿Canal cliente existe en Slack?",
+                                                                                             "type":  "main",
+                                                                                             "index":  0
+                                                                                         }
+                                                                                     ]
+                                                                                 ]
+                                                                    },
+                        "¿Canal cliente existe en Slack?":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "MASTER (Update) slack_canal_cliente_id",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ],
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Slack API: conversations.create",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "MASTER (Update) slack_canal_cliente_id":  {
+                                                                       "main":  [
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Aplicar resolvedClientChannelId → client",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ]
+                                                                                ]
+                                                                   },
+                        "Aplicar resolvedClientChannelId → client":  {
+                                                                         "main":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "Slack: RESUMEN → canal central",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ]
+                                                                                  ]
+                                                                     },
+                        "Slack API: conversations.create":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Guardar channel_id creado",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "Guardar channel_id creado":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Slack API: conversations.setPurpose",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           },
+                                                                           {
+                                                                               "node":  "MASTER (Update) slack_canal_cliente_id",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Slack: RESUMEN → canal central":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "¿Hay urgentes o Top10?",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                        "¿Hay urgentes o Top10?":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "Slack: URGENTES → canal cliente",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ],
+                                                                    [
+                                                                        {
+                                                                            "node":  "MASTER (Update) hora_generado",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "Slack: URGENTES → canal cliente":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "MASTER (Update) hora_generado",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "MASTER (Update) hora_generado":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Siguiente cliente (next batch)",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Siguiente cliente (next batch)":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Iterar clientes",
+                                                                                    "type":  "main",
+                                                                                    "index":  1
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           }
+                    },
+    "active":  false,
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  false
+                 },
+    "pinData":  {
+
+                },
+    "tags":  [
+
+             ]
+}

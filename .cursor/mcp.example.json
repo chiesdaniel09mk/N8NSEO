@@ -8,7 +8,7 @@
         "LOG_LEVEL": "error",
         "DISABLE_CONSOLE_OUTPUT": "true",
         "N8N_API_URL": "http://localhost:5678",
-        "N8N_API_KEY": "PASTE_YOUR_KEY_HERE"
+        "N8N_API_KEY": "YOUR_N8N_API_KEY_HERE"
       }
     }
   }

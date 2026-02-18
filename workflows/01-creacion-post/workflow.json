@@ -1,763 +1,846 @@
-{
-  "name": "Creación de post (Make → n8n)",
-  "nodes": [
-    {
-      "id": "ManualTrigger",
-      "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [100, 300],
-      "parameters": {}
-    },
-    {
-      "id": "SheetsMaestro",
-      "name": "MAESTRO_AUTOMATIZACION (Get)",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 3,
-      "position": [320, 300],
-      "parameters": {
-        "resource": "sheet",
-        "operation": "getAll",
-        "documentId": "={{$env.MAESTRO_AUTOMATIZACION_ID}}",
-        "sheetName": "={{$env.MAESTRO_AUTOMATIZACION_SHEET || 'Hoja 1'}}",
-        "options": {
-          "returnAll": true
-        }
-      },
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "SetWrapClient",
-      "name": "Wrap client",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [560, 300],
-      "parameters": {
-        "keepOnlySet": true,
-        "values": {
-          "object": [
-            {
-              "name": "client",
-              "value": "={{$json}}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "SplitClientes",
-      "name": "Iterar clientes",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 1,
-      "position": [820, 300],
-      "parameters": {
-        "batchSize": 1
-      }
-    },
-    {
-      "id": "SheetsPosts",
-      "name": "CREDITOS_POSTS (Get)",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 3,
-      "position": [1060, 220],
-      "parameters": {
-        "resource": "sheet",
-        "operation": "getAll",
-        "documentId": "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
-        "sheetName": "={{$env.PLANIFICACION_SHEET_NAME || 'CREDITOS_POSTS'}}",
-        "options": {
-          "returnAll": true,
-          "includeRowNumber": true
-        }
-      },
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "CodeElegirPendiente",
-      "name": "Elegir 1 fila pendiente",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1320, 220],
-      "parameters": {
-        "language": "JavaScript",
-        "jsCode": "const client = $json.client;\n\nif (!items.length) {\n  return [{ json: { client, hasPost: false } }];\n}\n\n// Cada item viene de Google Sheets con la fila completa\nconst candidatos = items\n  .map(i => i.json)\n  .filter(row => {\n    const estado = (row.estado || row.M || \"\").toString().trim().toLowerCase();\n    const urlDoc = (row.url_doc || row.N || \"\").toString().trim();\n    const condEstado = estado === \"pendiente\";\n    const condUrl = urlDoc === \"\" || urlDoc === \"-\";\n    return condEstado && condUrl;\n  });\n\nif (!candidatos.length) {\n  return [{ json: { client, hasPost: false } }];\n}\n\nconst post = candidatos[0];\nconst rowNumber = post.rowNumber || post.__rowNumber || post.__ROW_NUMBER__;\n\nreturn [\n  {\n    json: {\n      client,\n      post,\n      rowNumber,\n      hasPost: true\n    }\n  }\n];\n"
-      }
-    },
-    {
-      "id": "IfHayFila",
-      "name": "¿Hay fila?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [1580, 220],
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{$json.hasPost === true}}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "SheetsUpdateRevisar",
-      "name": "Update row: revisar",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 3,
-      "position": [1840, 140],
-      "parameters": {
-        "resource": "sheet",
-        "operation": "update",
-        "documentId": "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
-        "sheetName": "CREDITOS_POSTS",
-        "options": {
-          "valueRenderMode": "FORMATTED_VALUE"
-        },
-        "updateKey": "rowNumber",
-        "keyRow": 0,
-        "columns": [
-          "estado",
-          "fecha_generacion"
-        ],
-        "schema": {
-          "estado": "revisar",
-          "fecha_generacion": "={{$now.toISO()}}"
-        }
-      },
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "SetPrompt",
-      "name": "prompt_final",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [2100, 140],
-      "parameters": {
-        "keepOnlySet": false,
-        "values": {
-          "string": [
-            {
-              "name": "prompt_final",
-              "value": "Eres un redactor SEO senior especializado en contenidos web en español de España.\\n\\nDATOS DE ENTRADA\\n- Keyword principal: \\\"{{$json.post.keyword_principal}}\\\"\\n- Title (tema): \\\"{{$json.post.tema}}\\\"\\n- Description (si está vacía, créala): \\\"{{$json.post.descripcion || $json.post.description}}\\\"\\n- Tipo de texto: \\\"{{$json.post.tipo_texto}}\\\"\\n- Fecha subir post: \\\"{{$json.post.fecha_subir_post}}\\\"\\n- Imagen (NADA/GENERAR): \\\"{{$json.post.imagen}}\\\"\\n- URL imagen (si existe): \\\"{{$json.post.url_imagen}}\\\"\\n- H1 sugerido: \\\"{{$json.post.h1_sugerido}}\\\"\\n- H2 forzado: \\\"{{$json.post.h2_forzado}}\\\"\\n- H3 forzado: \\\"{{$json.post.h3_forzado}}\\\"\\n- H4 forzado: \\\"{{$json.post.h4_forzado}}\\\"\\n- H5 forzado: \\\"{{$json.post.h5_forzado}}\\\"\\n- Instrucciones específicas: \\\"{{$json.post.instrucciones_especificas}}\\\"\\n- Enlaces incrustados: \\\"{{$json.post.enlaces_incrustados}}\\\"\\n\\nOBJETIVO\\nGenera un documento en HTML (sin Markdown, sin backticks) con esta estructura EXACTA:\\n\\n1) BLOQUE FICHA (al principio)\\n<h2>Ficha del post</h2>\\n<p><strong>Title:</strong> (usa el campo tema)</p>\\n<p><strong>Description:</strong> (usa el campo Description; si viene vacío, crea una)</p>\\n<p><strong>Tipo de texto:</strong> (usa el campo Tipo de texto)</p>\\n<p><strong>Fecha subir post:</strong> (usa el campo Fecha subir post)</p>\\n\\n2) CONTENIDO (después)\\n- Empieza con un <h1> basado en H1 sugerido (si está vacío, crea uno óptimo)\\n- Usa el H2/H3/H4/H5 forzados si existen; si no existen, crea una estructura lógica.\\n- Incluye los enlaces incrustados donde tenga sentido (sin listarlos aparte).\\n- Sigue instrucciones específicas al pie de la letra.\\n- Tono profesional, claro, persuasivo, y optimizado SEO.\\n- Longitud: la necesaria para cubrir bien el tema (sin relleno).\\n\\n3) BLOQUE WORDPRESS (al final)\\nIncluye un bloque <div id=\\\"wp-ready\\\"> que contenga:\\n- El HTML limpio del contenido para pegar en WordPress\\n- Si Imagen=\\\"URL\\\" y hay URL imagen, incluye un <img src=\\\"...\\\"> al principio del contenido.\\n- Si Imagen=\\\"NADA\\\", NO incluyas imagen.\\n- Si Imagen=\\\"GENERAR\\\", NO incluyas URL, pero sí deja un hueco:\\n  <div class=\\\"img-placeholder\\\">[IMAGEN A INSERTAR]</div>\\n\\n4) PROMPT IA (si Imagen=\\\"GENERAR\\\")\\nAl final, SI y SOLO SI Imagen=\\\"GENERAR\\\", añade:\\n<pre>\\nPROMPT IA: (un prompt detallado para generar una imagen acorde al post, realista, sin texto en la imagen)\\n</pre>\\n\\nIMPORTANTE\\n- Devuelve solo HTML.\\n- No añadas explicaciones."
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "OpenAIChat",
-      "name": "OpenAI Chat",
-      "type": "n8n-nodes-base.openAi",
-      "typeVersion": 2,
-      "position": [2360, 140],
-      "parameters": {
-        "resource": "chat",
-        "operation": "chat",
-        "model": "gpt-4.1-mini",
-        "messages": [
-          {
-            "message": "={{$json.prompt_final}}",
-            "role": "user"
-          }
-        ]
-      },
-      "credentials": {
-        "openAiApi": {
-          "id": "",
-          "name": "OpenAI"
-        }
-      },
-      "hooks": [],
-      "alwaysOutputData": false,
-      "continueOnFail": true
-    },
-    {
-      "id": "IfOpenAIError",
-      "name": "¿OpenAI error?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [2620, 140],
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{$json.error !== undefined}}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "CodeExtraerPrompt",
-      "name": "Extraer PROMPT IA (regex)",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [2880, 40],
-      "parameters": {
-        "language": "JavaScript",
-        "jsCode": "const text =\n  $json.openai_text ||\n  $json.choices?.[0]?.message?.content ||\n  $json.data?.[0]?.message?.content ||\n  \"\";\n\nconst match = text.match(/<pre>\\s*PROMPT IA:\\s*([\\s\\S]*?)\\s*<\\/pre>/i);\n\nreturn [\n  {\n    json: {\n      ...$json,\n      openai_html: text,\n      prompt_ia: match ? match[1].trim() : \"\"\n    }\n  }\n];\n"
-      }
-    },
-    {
-      "id": "RouterImagen",
-      "name": "Router imagen",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 1,
-      "position": [3140, 40],
-      "parameters": {
-        "value": "={{$json.post.imagen}}",
-        "rules": [
-          {
-            "operation": "equal",
-            "value": "GENERAR"
-          },
-          {
-            "operation": "always"
-          }
-        ]
-      }
-    },
-    {
-      "id": "IfUrlImagen",
-      "name": "¿URL imagen?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [3400, 200],
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{($json.post.url_imagen || \"\").startsWith(\"http\")}}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "OpenAIImage",
-      "name": "OpenAI Image",
-      "type": "n8n-nodes-base.openAi",
-      "typeVersion": 2,
-      "position": [3400, -140],
-      "parameters": {
-        "resource": "image",
-        "operation": "create",
-        "model": "gpt-image-1",
-        "prompt": "={{$json.prompt_ia}}",
-        "size": "1024x1024",
-        "responseFormat": "b64_json"
-      },
-      "credentials": {
-        "openAiApi": {
-          "id": "",
-          "name": "OpenAI"
-        }
-      }
-    },
-    {
-      "id": "CodeBase64",
-      "name": "Base64 → binario",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [3660, -140],
-      "parameters": {
-        "language": "JavaScript",
-        "jsCode": "const imageB64 = $json.data?.[0]?.b64_json || $json.b64 || \"\";\n\nif (!imageB64) {\n  return items;\n}\n\nconst buffer = Buffer.from(imageB64, \"base64\");\n\nreturn [\n  {\n    json: {\n      ...$json\n    },\n    binary: {\n      data: {\n        data: buffer,\n        mimeType: \"image/png\",\n        fileName: \"post-image.png\"\n      }\n    }\n  }\n];\n"
-      }
-    },
-    {
-      "id": "DriveUpload",
-      "name": "Drive upload imagen",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [3920, -140],
-      "parameters": {
-        "operation": "upload",
-        "binaryData": true,
-        "fileName": "={{$json.client.Nombre_cliente || $json.client.Cliente_ID || \"post\"}}-imagen.png",
-        "parentId": "={{$json.client.ID_carpeta_drive || $json.client.id_carpeta_drive}}"
-      },
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "DocsCrearA",
-      "name": "Docs (GENERAR)",
-      "type": "n8n-nodes-base.googleDocs",
-      "typeVersion": 1,
-      "position": [4180, -40],
-      "parameters": {
-        "documentName": "={{$json.post.tema || \"Post\"}}",
-        "operation": "create",
-        "options": {
-          "documentContent": "={{$json.openai_html}}"
-        }
-      },
-      "credentials": {
-        "googleDocsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "SheetsUpdateA",
-      "name": "Update row (GENERAR)",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 3,
-      "position": [4440, -40],
-      "parameters": {
-        "resource": "sheet",
-        "operation": "update",
-        "documentId": "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
-        "sheetName": "CREDITOS_POSTS",
-        "options": {},
-        "updateKey": "rowNumber",
-        "keyRow": 0,
-        "columns": [
-          "estado",
-          "url_doc",
-          "fecha_generacion",
-          "prompt_ia",
-          "url_imagen_ia"
-        ],
-        "schema": {
-          "estado": "GENERADO",
-          "url_doc": "={{$json.url}}",
-          "fecha_generacion": "={{$now.toISO()}}",
-          "prompt_ia": "={{$json.prompt_ia}}",
-          "url_imagen_ia": "={{$json.webViewLink || $json.alternateLink || $json.id}}"
-        }
-      },
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "DocsCrearB",
-      "name": "Docs (URL/NADA)",
-      "type": "n8n-nodes-base.googleDocs",
-      "typeVersion": 1,
-      "position": [3660, 360],
-      "parameters": {
-        "documentName": "={{$json.post.tema || \"Post\"}}",
-        "operation": "create",
-        "options": {
-          "documentContent": "={{$json.openai_html}}"
-        }
-      },
-      "credentials": {
-        "googleDocsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "SheetsUpdateB",
-      "name": "Update row (URL/NADA)",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 3,
-      "position": [3920, 360],
-      "parameters": {
-        "resource": "sheet",
-        "operation": "update",
-        "documentId": "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
-        "sheetName": "CREDITOS_POSTS",
-        "options": {},
-        "updateKey": "rowNumber",
-        "keyRow": 0,
-        "columns": [
-          "estado",
-          "imagen",
-          "url_doc",
-          "fecha_generacion"
-        ],
-        "schema": {
-          "estado": "GENERADO",
-          "imagen": "generado",
-          "url_doc": "={{$json.url}}",
-          "fecha_generacion": "={{$now.toISO()}}"
-        }
-      },
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "SheetsErrorOpenAI",
-      "name": "Update row ERROR_OPENAI",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 3,
-      "position": [2880, 260],
-      "parameters": {
-        "resource": "sheet",
-        "operation": "update",
-        "documentId": "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
-        "sheetName": "CREDITOS_POSTS",
-        "options": {},
-        "updateKey": "rowNumber",
-        "keyRow": 0,
-        "columns": [
-          "estado"
-        ],
-        "schema": {
-          "estado": "ERROR_OPENAI"
-        }
-      },
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "",
-          "name": "Google (Sheets+Drive+Docs)"
-        }
-      }
-    },
-    {
-      "id": "SlackError",
-      "name": "Slack error OpenAI",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 1,
-      "position": [3140, 260],
-      "parameters": {
-        "resource": "message",
-        "operation": "post",
-        "channel": "#alerts",
-        "text": "Error OpenAI en creación de post. Cliente: ={{$json.client.Nombre_cliente || $json.client.Cliente_ID}} Keyword: ={{$json.post.keyword_principal}} Error: ={{$json.error?.message}}"
-      },
-      "credentials": {
-        "slackApi": {
-          "id": "",
-          "name": "Slack"
-        }
-      }
-    },
-    {
-      "id": "NextBatch",
-      "name": "Next Batch",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1840, 360],
-      "parameters": {}
-    }
-  ],
-  "connections": {
-    "MAESTRO_AUTOMATIZACION (Get)": {
-      "main": [
-        [
-          {
-            "node": "Wrap client",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Manual Trigger": {
-      "main": [
-        [
-          {
-            "node": "MAESTRO_AUTOMATIZACION (Get)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wrap client": {
-      "main": [
-        [
-          {
-            "node": "Iterar clientes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Iterar clientes": {
-      "main": [
-        [
-          {
-            "node": "CREDITOS_POSTS (Get)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Next Batch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "CREDITOS_POSTS (Get)": {
-      "main": [
-        [
-          {
-            "node": "Elegir 1 fila pendiente",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Elegir 1 fila pendiente": {
-      "main": [
-        [
-          {
-            "node": "¿Hay fila?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Hay fila?": {
-      "main": [
-        [
-          {
-            "node": "Update row: revisar",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Next Batch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update row: revisar": {
-      "main": [
-        [
-          {
-            "node": "prompt_final",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "prompt_final": {
-      "main": [
-        [
-          {
-            "node": "OpenAI Chat",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenAI Chat": {
-      "main": [
-        [
-          {
-            "node": "¿OpenAI error?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿OpenAI error?": {
-      "main": [
-        [
-          {
-            "node": "Extraer PROMPT IA (regex)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Update row ERROR_OPENAI",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update row ERROR_OPENAI": {
-      "main": [
-        [
-          {
-            "node": "Slack error OpenAI",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Slack error OpenAI": {
-      "main": [
-        [
-          {
-            "node": "Next Batch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extraer PROMPT IA (regex)": {
-      "main": [
-        [
-          {
-            "node": "Router imagen",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Router imagen": {
-      "main": [
-        [
-          {
-            "node": "OpenAI Image",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "¿URL imagen?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenAI Image": {
-      "main": [
-        [
-          {
-            "node": "Base64 → binario",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Base64 → binario": {
-      "main": [
-        [
-          {
-            "node": "Drive upload imagen",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Drive upload imagen": {
-      "main": [
-        [
-          {
-            "node": "Docs (GENERAR)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Docs (GENERAR)": {
-      "main": [
-        [
-          {
-            "node": "Update row (GENERAR)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Docs (URL/NADA)": {
-      "main": [
-        [
-          {
-            "node": "Update row (URL/NADA)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update row (GENERAR)": {
-      "main": [
-        [
-          {
-            "node": "Next Batch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update row (URL/NADA)": {
-      "main": [
-        [
-          {
-            "node": "Next Batch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿URL imagen?": {
-      "main": [
-        [
-          {
-            "node": "Docs (URL/NADA)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Docs (URL/NADA)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "active": false
-}
+﻿{
+    "name":  "S01 - Creacion Post",
+    "nodes":  [
+                  {
+                      "id":  "ManualTrigger",
+                      "name":  "Manual Trigger",
+                      "type":  "n8n-nodes-base.manualTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       100,
+                                       300
+                                   ],
+                      "parameters":  {
 
+                                     }
+                  },
+                  {
+                      "id":  "SheetsMaestro",
+                      "name":  "MAESTRO_AUTOMATIZACION (Get)",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       320,
+                                       300
+                                   ],
+                      "parameters":  {
+                                         "resource":  "sheet",
+                                         "operation":  "read",
+                                         "documentId":  "={{$env.MAESTRO_AUTOMATIZACION_ID}}",
+                                         "sheetName":  "={{$env.MAESTRO_AUTOMATIZACION_SHEET || \u0027Hoja 1\u0027}}",
+                                         "options":  {
+                                                         "returnAll":  true
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "SetWrapClient",
+                      "name":  "Wrap client",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  2,
+                      "position":  [
+                                       560,
+                                       300
+                                   ],
+                      "parameters":  {
+                                         "keepOnlySet":  true,
+                                         "values":  {
+                                                        "object":  [
+                                                                       {
+                                                                           "name":  "client",
+                                                                           "value":  "={{$json}}"
+                                                                       }
+                                                                   ]
+                                                    }
+                                     }
+                  },
+                  {
+                      "id":  "SplitClientes",
+                      "name":  "Iterar clientes",
+                      "type":  "n8n-nodes-base.splitInBatches",
+                      "typeVersion":  1,
+                      "position":  [
+                                       820,
+                                       300
+                                   ],
+                      "parameters":  {
+                                         "batchSize":  1
+                                     }
+                  },
+                  {
+                      "id":  "SheetsPosts",
+                      "name":  "CREDITOS_POSTS (Get)",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       1060,
+                                       220
+                                   ],
+                      "parameters":  {
+                                         "resource":  "sheet",
+                                         "operation":  "read",
+                                         "documentId":  "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
+                                         "sheetName":  "={{$env.PLANIFICACION_SHEET_NAME || \u0027CREDITOS_POSTS\u0027}}",
+                                         "options":  {
+                                                         "returnAll":  true,
+                                                         "includeRowNumber":  true
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "CodeElegirPendiente",
+                      "name":  "Elegir 1 fila pendiente",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1320,
+                                       220
+                                   ],
+                      "parameters":  {
+                                         "language":  "JavaScript",
+                                         "jsCode":  "const client = $json.client;\n\nif (!items.length) {\n  return [{ json: { client, hasPost: false } }];\n}\n\n// Cada item viene de Google Sheets con la fila completa\nconst candidatos = items\n  .map(i =\u003e i.json)\n  .filter(row =\u003e {\n    const estado = (row.estado || row.M || \"\").toString().trim().toLowerCase();\n    const urlDoc = (row.url_doc || row.N || \"\").toString().trim();\n    const condEstado = estado === \"pendiente\";\n    const condUrl = urlDoc === \"\" || urlDoc === \"-\";\n    return condEstado \u0026\u0026 condUrl;\n  });\n\nif (!candidatos.length) {\n  return [{ json: { client, hasPost: false } }];\n}\n\nconst post = candidatos[0];\nconst rowNumber = post.rowNumber || post.__rowNumber || post.__ROW_NUMBER__;\n\nreturn [\n  {\n    json: {\n      client,\n      post,\n      rowNumber,\n      hasPost: true\n    }\n  }\n];\n"
+                                     }
+                  },
+                  {
+                      "id":  "IfHayFila",
+                      "name":  "¿Hay fila?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1580,
+                                       220
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.hasPost === true}}"
+                                                                            }
+                                                                        ]
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "SheetsUpdateRevisar",
+                      "name":  "Update row: revisar",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       1840,
+                                       140
+                                   ],
+                      "parameters":  {
+                                         "resource":  "sheet",
+                                         "operation":  "update",
+                                         "documentId":  "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
+                                         "sheetName":  "CREDITOS_POSTS",
+                                         "options":  {
+                                                         "valueRenderMode":  "FORMATTED_VALUE"
+                                                     },
+                                         "updateKey":  "rowNumber",
+                                         "keyRow":  0,
+                                         "columns":  [
+                                                         "estado",
+                                                         "fecha_generacion"
+                                                     ],
+                                         "schema":  {
+                                                        "estado":  "revisar",
+                                                        "fecha_generacion":  "={{$now.toISO()}}"
+                                                    }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "SetPrompt",
+                      "name":  "prompt_final",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2100,
+                                       140
+                                   ],
+                      "parameters":  {
+                                         "keepOnlySet":  false,
+                                         "values":  {
+                                                        "string":  [
+                                                                       {
+                                                                           "name":  "prompt_final",
+                                                                           "value":  "Eres un redactor SEO senior especializado en contenidos web en español de España.\\n\\nDATOS DE ENTRADA\\n- Keyword principal: \\\"{{$json.post.keyword_principal}}\\\"\\n- Title (tema): \\\"{{$json.post.tema}}\\\"\\n- Description (si está vacía, créala): \\\"{{$json.post.descripcion || $json.post.description}}\\\"\\n- Tipo de texto: \\\"{{$json.post.tipo_texto}}\\\"\\n- Fecha subir post: \\\"{{$json.post.fecha_subir_post}}\\\"\\n- Imagen (NADA/GENERAR): \\\"{{$json.post.imagen}}\\\"\\n- URL imagen (si existe): \\\"{{$json.post.url_imagen}}\\\"\\n- H1 sugerido: \\\"{{$json.post.h1_sugerido}}\\\"\\n- H2 forzado: \\\"{{$json.post.h2_forzado}}\\\"\\n- H3 forzado: \\\"{{$json.post.h3_forzado}}\\\"\\n- H4 forzado: \\\"{{$json.post.h4_forzado}}\\\"\\n- H5 forzado: \\\"{{$json.post.h5_forzado}}\\\"\\n- Instrucciones específicas: \\\"{{$json.post.instrucciones_especificas}}\\\"\\n- Enlaces incrustados: \\\"{{$json.post.enlaces_incrustados}}\\\"\\n\\nOBJETIVO\\nGenera un documento en HTML (sin Markdown, sin backticks) con esta estructura EXACTA:\\n\\n1) BLOQUE FICHA (al principio)\\n\u003ch2\u003eFicha del post\u003c/h2\u003e\\n\u003cp\u003e\u003cstrong\u003eTitle:\u003c/strong\u003e (usa el campo tema)\u003c/p\u003e\\n\u003cp\u003e\u003cstrong\u003eDescription:\u003c/strong\u003e (usa el campo Description; si viene vacío, crea una)\u003c/p\u003e\\n\u003cp\u003e\u003cstrong\u003eTipo de texto:\u003c/strong\u003e (usa el campo Tipo de texto)\u003c/p\u003e\\n\u003cp\u003e\u003cstrong\u003eFecha subir post:\u003c/strong\u003e (usa el campo Fecha subir post)\u003c/p\u003e\\n\\n2) CONTENIDO (después)\\n- Empieza con un \u003ch1\u003e basado en H1 sugerido (si está vacío, crea uno óptimo)\\n- Usa el H2/H3/H4/H5 forzados si existen; si no existen, crea una estructura lógica.\\n- Incluye los enlaces incrustados donde tenga sentido (sin listarlos aparte).\\n- Sigue instrucciones específicas al pie de la letra.\\n- Tono profesional, claro, persuasivo, y optimizado SEO.\\n- Longitud: la necesaria para cubrir bien el tema (sin relleno).\\n\\n3) BLOQUE WORDPRESS (al final)\\nIncluye un bloque \u003cdiv id=\\\"wp-ready\\\"\u003e que contenga:\\n- El HTML limpio del contenido para pegar en WordPress\\n- Si Imagen=\\\"URL\\\" y hay URL imagen, incluye un \u003cimg src=\\\"...\\\"\u003e al principio del contenido.\\n- Si Imagen=\\\"NADA\\\", NO incluyas imagen.\\n- Si Imagen=\\\"GENERAR\\\", NO incluyas URL, pero sí deja un hueco:\\n  \u003cdiv class=\\\"img-placeholder\\\"\u003e[IMAGEN A INSERTAR]\u003c/div\u003e\\n\\n4) PROMPT IA (si Imagen=\\\"GENERAR\\\")\\nAl final, SI y SOLO SI Imagen=\\\"GENERAR\\\", añade:\\n\u003cpre\u003e\\nPROMPT IA: (un prompt detallado para generar una imagen acorde al post, realista, sin texto en la imagen)\\n\u003c/pre\u003e\\n\\nIMPORTANTE\\n- Devuelve solo HTML.\\n- No añadas explicaciones."
+                                                                       }
+                                                                   ]
+                                                    }
+                                     }
+                  },
+                  {
+                      "id":  "OpenAIChat",
+                      "name":  "OpenAI Chat",
+                      "type":  "n8n-nodes-base.openAi",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       2360,
+                                       140
+                                   ],
+                      "parameters":  {
+                                         "resource":  "chat",
+                                         "operation":  "complete",
+                                         "model":  "gpt-4.1-mini",
+                                         "messages":  [
+                                                          {
+                                                              "message":  "={{$json.prompt_final}}",
+                                                              "role":  "user"
+                                                          }
+                                                      ]
+                                     },
+                      "credentials":  {
+                                          "openAiApi":  {
+                                                            "id":  "",
+                                                            "name":  "OpenAI"
+                                                        }
+                                      },
+                      "hooks":  [
+
+                                ],
+                      "alwaysOutputData":  false,
+                      "continueOnFail":  true
+                  },
+                  {
+                      "id":  "IfOpenAIError",
+                      "name":  "¿OpenAI error?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2620,
+                                       140
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.error !== undefined}}"
+                                                                            }
+                                                                        ]
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "CodeExtraerPrompt",
+                      "name":  "Extraer PROMPT IA (regex)",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2880,
+                                       40
+                                   ],
+                      "parameters":  {
+                                         "language":  "JavaScript",
+                                         "jsCode":  "const text =\n  $json.openai_text ||\n  $json.choices?.[0]?.message?.content ||\n  $json.data?.[0]?.message?.content ||\n  \"\";\n\nconst match = text.match(/\u003cpre\u003e\\s*PROMPT IA:\\s*([\\s\\S]*?)\\s*\u003c\\/pre\u003e/i);\n\nreturn [\n  {\n    json: {\n      ...$json,\n      openai_html: text,\n      prompt_ia: match ? match[1].trim() : \"\"\n    }\n  }\n];\n"
+                                     }
+                  },
+                  {
+                      "id":  "RouterImagen",
+                      "name":  "Router imagen",
+                      "type":  "n8n-nodes-base.switch",
+                      "typeVersion":  1,
+                      "position":  [
+                                       3140,
+                                       40
+                                   ],
+                      "parameters":  {
+                                         "value":  "={{$json.post.imagen}}",
+                                         "rules":  [
+                                                       {
+                                                           "operation":  "equal",
+                                                           "value":  "GENERAR"
+                                                       },
+                                                       {
+                                                           "operation":  "always"
+                                                       }
+                                                   ]
+                                     }
+                  },
+                  {
+                      "id":  "IfUrlImagen",
+                      "name":  "¿URL imagen?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       3400,
+                                       200
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{($json.post.url_imagen || \"\").startsWith(\"http\")}}"
+                                                                            }
+                                                                        ]
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "OpenAIImage",
+                      "name":  "OpenAI Image",
+                      "type":  "n8n-nodes-base.openAi",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       3400,
+                                       -140
+                                   ],
+                      "parameters":  {
+                                         "resource":  "image",
+                                         "operation":  "create",
+                                         "model":  "gpt-image-1",
+                                         "prompt":  "={{$json.prompt_ia}}",
+                                         "size":  "1024x1024",
+                                         "responseFormat":  "b64_json"
+                                     },
+                      "credentials":  {
+                                          "openAiApi":  {
+                                                            "id":  "",
+                                                            "name":  "OpenAI"
+                                                        }
+                                      }
+                  },
+                  {
+                      "id":  "CodeBase64",
+                      "name":  "Base64 → binario",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       3660,
+                                       -140
+                                   ],
+                      "parameters":  {
+                                         "language":  "JavaScript",
+                                         "jsCode":  "const imageB64 = $json.data?.[0]?.b64_json || $json.b64 || \"\";\n\nif (!imageB64) {\n  return items;\n}\n\nconst buffer = Buffer.from(imageB64, \"base64\");\n\nreturn [\n  {\n    json: {\n      ...$json\n    },\n    binary: {\n      data: {\n        data: buffer,\n        mimeType: \"image/png\",\n        fileName: \"post-image.png\"\n      }\n    }\n  }\n];\n"
+                                     }
+                  },
+                  {
+                      "id":  "DriveUpload",
+                      "name":  "Drive upload imagen",
+                      "type":  "n8n-nodes-base.googleDrive",
+                      "typeVersion":  3,
+                      "position":  [
+                                       3920,
+                                       -140
+                                   ],
+                      "parameters":  {
+                                         "operation":  "upload",
+                                         "binaryData":  true,
+                                         "fileName":  "={{$json.client.Nombre_cliente || $json.client.Cliente_ID || \"post\"}}-imagen.png",
+                                         "parentId":  "={{$json.client.ID_carpeta_drive || $json.client.id_carpeta_drive}}"
+                                     },
+                      "credentials":  {
+                                          "googleDriveOAuth2Api":  {
+                                                                       "id":  "",
+                                                                       "name":  "Google (Sheets+Drive+Docs)"
+                                                                   }
+                                      }
+                  },
+                  {
+                      "id":  "DocsCrearA",
+                      "name":  "Docs (GENERAR)",
+                      "type":  "n8n-nodes-base.googleDocs",
+                      "typeVersion":  1,
+                      "position":  [
+                                       4180,
+                                       -40
+                                   ],
+                      "parameters":  {
+                                         "documentName":  "={{$json.post.tema || \"Post\"}}",
+                                         "operation":  "create",
+                                         "options":  {
+                                                         "documentContent":  "={{$json.openai_html}}"
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "googleDocsOAuth2Api":  {
+                                                                      "id":  "",
+                                                                      "name":  "Google (Sheets+Drive+Docs)"
+                                                                  }
+                                      }
+                  },
+                  {
+                      "id":  "SheetsUpdateA",
+                      "name":  "Update row (GENERAR)",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       4440,
+                                       -40
+                                   ],
+                      "parameters":  {
+                                         "resource":  "sheet",
+                                         "operation":  "update",
+                                         "documentId":  "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
+                                         "sheetName":  "CREDITOS_POSTS",
+                                         "options":  {
+
+                                                     },
+                                         "updateKey":  "rowNumber",
+                                         "keyRow":  0,
+                                         "columns":  [
+                                                         "estado",
+                                                         "url_doc",
+                                                         "fecha_generacion",
+                                                         "prompt_ia",
+                                                         "url_imagen_ia"
+                                                     ],
+                                         "schema":  {
+                                                        "estado":  "GENERADO",
+                                                        "url_doc":  "={{$json.url}}",
+                                                        "fecha_generacion":  "={{$now.toISO()}}",
+                                                        "prompt_ia":  "={{$json.prompt_ia}}",
+                                                        "url_imagen_ia":  "={{$json.webViewLink || $json.alternateLink || $json.id}}"
+                                                    }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "DocsCrearB",
+                      "name":  "Docs (URL/NADA)",
+                      "type":  "n8n-nodes-base.googleDocs",
+                      "typeVersion":  1,
+                      "position":  [
+                                       3660,
+                                       360
+                                   ],
+                      "parameters":  {
+                                         "documentName":  "={{$json.post.tema || \"Post\"}}",
+                                         "operation":  "create",
+                                         "options":  {
+                                                         "documentContent":  "={{$json.openai_html}}"
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "googleDocsOAuth2Api":  {
+                                                                      "id":  "",
+                                                                      "name":  "Google (Sheets+Drive+Docs)"
+                                                                  }
+                                      }
+                  },
+                  {
+                      "id":  "SheetsUpdateB",
+                      "name":  "Update row (URL/NADA)",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       3920,
+                                       360
+                                   ],
+                      "parameters":  {
+                                         "resource":  "sheet",
+                                         "operation":  "update",
+                                         "documentId":  "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
+                                         "sheetName":  "CREDITOS_POSTS",
+                                         "options":  {
+
+                                                     },
+                                         "updateKey":  "rowNumber",
+                                         "keyRow":  0,
+                                         "columns":  [
+                                                         "estado",
+                                                         "imagen",
+                                                         "url_doc",
+                                                         "fecha_generacion"
+                                                     ],
+                                         "schema":  {
+                                                        "estado":  "GENERADO",
+                                                        "imagen":  "generado",
+                                                        "url_doc":  "={{$json.url}}",
+                                                        "fecha_generacion":  "={{$now.toISO()}}"
+                                                    }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "SheetsErrorOpenAI",
+                      "name":  "Update row ERROR_OPENAI",
+                      "type":  "n8n-nodes-base.googleSheets",
+                      "typeVersion":  3,
+                      "position":  [
+                                       2880,
+                                       260
+                                   ],
+                      "parameters":  {
+                                         "resource":  "sheet",
+                                         "operation":  "update",
+                                         "documentId":  "={{$json.client.ID_hoja_cliente || $json.client.id_hoja_cliente}}",
+                                         "sheetName":  "CREDITOS_POSTS",
+                                         "options":  {
+
+                                                     },
+                                         "updateKey":  "rowNumber",
+                                         "keyRow":  0,
+                                         "columns":  [
+                                                         "estado"
+                                                     ],
+                                         "schema":  {
+                                                        "estado":  "ERROR_OPENAI"
+                                                    }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "",
+                                                                        "name":  "Google (Sheets+Drive+Docs)"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "SlackError",
+                      "name":  "Slack error OpenAI",
+                      "type":  "n8n-nodes-base.slack",
+                      "typeVersion":  1,
+                      "position":  [
+                                       3140,
+                                       260
+                                   ],
+                      "parameters":  {
+                                         "resource":  "message",
+                                         "operation":  "post",
+                                         "channel":  "#alerts",
+                                         "text":  "Error OpenAI en creación de post. Cliente: ={{$json.client.Nombre_cliente || $json.client.Cliente_ID}} Keyword: ={{$json.post.keyword_principal}} Error: ={{$json.error?.message}}"
+                                     },
+                      "credentials":  {
+                                          "slackApi":  {
+                                                           "id":  "",
+                                                           "name":  "Slack"
+                                                       }
+                                      }
+                  },
+                  {
+                      "id":  "NextBatch",
+                      "name":  "Next Batch",
+                      "type":  "n8n-nodes-base.noOp",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1840,
+                                       360
+                                   ],
+                      "parameters":  {
+
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "MAESTRO_AUTOMATIZACION (Get)":  {
+                                                             "main":  [
+                                                                          [
+                                                                              {
+                                                                                  "node":  "Wrap client",
+                                                                                  "type":  "main",
+                                                                                  "index":  0
+                                                                              }
+                                                                          ]
+                                                                      ]
+                                                         },
+                        "Manual Trigger":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "MAESTRO_AUTOMATIZACION (Get)",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Wrap client":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "Iterar clientes",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "Iterar clientes":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "CREDITOS_POSTS (Get)",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ],
+                                                             [
+                                                                 {
+                                                                     "node":  "Next Batch",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "CREDITOS_POSTS (Get)":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "Elegir 1 fila pendiente",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "Elegir 1 fila pendiente":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "¿Hay fila?",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "¿Hay fila?":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "Update row: revisar",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ],
+                                                        [
+                                                            {
+                                                                "node":  "Next Batch",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "Update row: revisar":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "prompt_final",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "prompt_final":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "OpenAI Chat",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "OpenAI Chat":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "¿OpenAI error?",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "¿OpenAI error?":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Extraer PROMPT IA (regex)",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ],
+                                                            [
+                                                                {
+                                                                    "node":  "Update row ERROR_OPENAI",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Update row ERROR_OPENAI":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Slack error OpenAI",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Slack error OpenAI":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Next Batch",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Extraer PROMPT IA (regex)":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Router imagen",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Router imagen":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "OpenAI Image",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ],
+                                                           [
+                                                               {
+                                                                   "node":  "¿URL imagen?",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "OpenAI Image":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Base64 → binario",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Base64 → binario":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Drive upload imagen",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Drive upload imagen":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Docs (GENERAR)",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Docs (GENERAR)":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Update row (GENERAR)",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Docs (URL/NADA)":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Update row (URL/NADA)",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Update row (GENERAR)":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "Next Batch",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "Update row (URL/NADA)":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Next Batch",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "¿URL imagen?":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Docs (URL/NADA)",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ],
+                                                          [
+                                                              {
+                                                                  "node":  "Docs (URL/NADA)",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "active":  false
+}

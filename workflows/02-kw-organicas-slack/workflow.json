@@ -1,5 +1,5 @@
 {
-  "name": "Escenario 2 — KW orgánicas (SE Ranking) → cambios → Slack (Make→n8n)",
+  "name": "S02 - KW Organicas Slack",
   "settings": {
     "executionOrder": "v1"
   },
@@ -20,7 +20,7 @@
       "position": [340, 300],
       "parameters": {
         "resource": "sheet",
-        "operation": "getAll",
+        "operation": "read",
         "documentId": "={{$env.MASTER_SEO_CLIENTES_ID}}",
         "sheetName": "={{$env.MASTER_SEO_CLIENTES_SHEET || 'Hoja 1'}}",
         "options": {
@@ -64,7 +64,7 @@
       "position": [1080, 180],
       "parameters": {
         "resource": "sheet",
-        "operation": "getAll",
+        "operation": "read",
         "documentId": "={{$json.client.client_sheet_id}}",
         "sheetName": "CAMBIOS_KW_ORGANICAS",
         "options": {
@@ -86,7 +86,7 @@
       "position": [1080, 420],
       "parameters": {
         "resource": "sheet",
-        "operation": "getAll",
+        "operation": "read",
         "documentId": "={{$json.client.client_sheet_id}}",
         "sheetName": "ALERTAS_KW_RESUMEN",
         "options": {
@@ -107,7 +107,7 @@
       "typeVersion": 2,
       "position": [1320, 300],
       "parameters": {
-        "mode": "multiplex"
+        "mode": "append"
       }
     },
     {

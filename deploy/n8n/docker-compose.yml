@@ -10,7 +10,7 @@
       - postgres_data:/var/lib/postgresql/data
 
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:${N8N_VERSION}
     restart: unless-stopped
     depends_on:
       - postgres
