@@ -1,0 +1,1165 @@
+{
+  "meta": {
+    "instanceId": "45e293393b5dd8437fb351e5b1ef5511ef67e6e0826a1c10b9b68be850b67593",
+    "templateCredsSetupCompleted": true
+  },
+  "nodes": [
+    {
+      "id": "ad859b3e-dc9e-4016-b9c5-3585eb2fb43e",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        -240,
+        -100
+      ],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "fe92e0aa-7b45-4355-81ec-5a7531816637",
+      "name": "Get Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        -40,
+        -100
+      ],
+      "parameters": {
+        "options": {},
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gid=0",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-_4LR9HEyqSlg85zcyAXm3tkOW_ip9JzpsVfQu2hQuI/edit#gid=0",
+          "cachedResultName": "Leads / Unprocessed"
+        },
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1-_4LR9HEyqSlg85zcyAXm3tkOW_ip9JzpsVfQu2hQuI",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-_4LR9HEyqSlg85zcyAXm3tkOW_ip9JzpsVfQu2hQuI/edit?usp=drivesdk",
+          "cachedResultName": "Outreach Bot"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "credential-id",
+          "name": "googleSheetsOAuth2Api Credential"
+        }
+      },
+      "typeVersion": 4.6
+    },
+    {
+      "id": "89554e8e-5516-4341-bf52-2c9c834bda29",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        180,
+        -100
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "425bb1e7-6fa3-46f7-91b1-137d76c27a50",
+      "name": "Google Search for Person LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "onError": "continueRegularOutput",
+      "position": [
+        420,
+        -80
+      ],
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~rag-web-browser/run-sync-get-dataset-items",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{\n`${$json['First Name']} ${$json['Last Name']} ${$json['Company']} site:linkedin.com`\n}}"
+            },
+            {
+              "name": "maxResults",
+              "value": "={{Number(10)}}"
+            }
+          ]
+        },
+        "genericAuthType": "httpHeaderAuth",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "180"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "httpHeaderAuth Credential"
+        }
+      },
+      "typeVersion": 4.2,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "b358d396-0a34-41fe-9b54-038b0e8256d8",
+      "name": "Only People Links",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        620,
+        -80
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "39ff27fa-4a6a-4c30-9775-bdb9f4395eed",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              },
+              "leftValue": "={{ $json.searchResult.url }}",
+              "rightValue": "^\\/www\\.linkedin\\.com\\/in\\/[a-zA-Z0-9\\-_%]+\\/?$"
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "cb022f15-5f65-4e14-885e-ab394c3b56ef",
+      "name": "Aggregate",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [
+        820,
+        -80
+      ],
+      "parameters": {
+        "include": "specifiedFields",
+        "options": {},
+        "aggregate": "aggregateAllItemData",
+        "fieldsToInclude": "searchResult",
+        "destinationFieldName": "results"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "5f9cda61-14be-4af2-aa7c-442ca90d7941",
+      "name": "Get LinkedIn Person",
+      "type": "n8n-nodes-base.httpRequest",
+      "onError": "continueRegularOutput",
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apimaestro~linkedin-profile-detail/run-sync-get-dataset-items",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "username",
+              "value": "={{ $json.results.first().searchResult.url }}"
+            }
+          ]
+        },
+        "genericAuthType": "httpHeaderAuth",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "180"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "httpHeaderAuth Credential"
+        }
+      },
+      "typeVersion": 4.2,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "bf62897a-7f7c-45dc-b142-dd34f30a0a09",
+      "name": "Current Company Exists?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        400,
+        360
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "b762cbba-c2eb-4bf3-95b2-783d59ad862a",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.basic_info.current_company_url }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "20b6b7d5-4082-4f38-a596-7c36fa46020d",
+      "name": "Google Search for Company LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "onError": "continueRegularOutput",
+      "position": [
+        620,
+        500
+      ],
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~rag-web-browser/run-sync-get-dataset-items",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{\n`${$json['Company']} site:linkedin.com`\n}}"
+            }
+          ]
+        },
+        "genericAuthType": "httpHeaderAuth",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "180"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "httpHeaderAuth Credential"
+        }
+      },
+      "typeVersion": 4.2,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "8b725ed1-8595-4cf2-80d4-fadb5e2a344e",
+      "name": "Only Company Links",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        820,
+        500
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "39ff27fa-4a6a-4c30-9775-bdb9f4395eed",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              },
+              "leftValue": "={{ $json.searchResult.url }}",
+              "rightValue": "^\\/www\\.linkedin\\.com\\/company\\/[a-zA-Z0-9\\-_%]+\\/?$"
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "3d49a9fb-1a85-4bf1-9d82-5afa85b7dc2b",
+      "name": "Aggregate1",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [
+        1000,
+        500
+      ],
+      "parameters": {
+        "include": "specifiedFields",
+        "options": {},
+        "aggregate": "aggregateAllItemData",
+        "fieldsToInclude": "searchResult",
+        "destinationFieldName": "results"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "562dab6b-7aeb-436c-8573-821f330c55c5",
+      "name": "Set Company URL",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1200,
+        340
+      ],
+      "parameters": {
+        "mode": "raw",
+        "options": {},
+        "jsonOutput": "={\n  \"company_url\": \"{{ $json.basic_info.current_company_url }}\"\n}\n"
+      },
+      "typeVersion": 3.4
+    },
+    {
+      "id": "3b1f1c2a-1c7b-4419-8954-99ab719f1a15",
+      "name": "Set Company URL1",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1200,
+        500
+      ],
+      "parameters": {
+        "mode": "raw",
+        "options": {},
+        "jsonOutput": "={\n  \"company_url\": \"{{ $json.results.first().searchResult.url }}\"\n}\n"
+      },
+      "typeVersion": 3.4
+    },
+    {
+      "id": "e72d6c81-2bb8-4d10-86f3-51dabae509c9",
+      "name": "Get LinkedIn Company",
+      "type": "n8n-nodes-base.httpRequest",
+      "onError": "continueRegularOutput",
+      "position": [
+        1460,
+        560
+      ],
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apimaestro~linkedin-company-detail/run-sync-get-dataset-items",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "identifier",
+              "value": "={{ [$json.company_url] }}"
+            }
+          ]
+        },
+        "genericAuthType": "httpHeaderAuth",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "180"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "httpHeaderAuth Credential"
+        }
+      },
+      "typeVersion": 4.2,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "d6fd7250-7536-48f6-9add-cf60af83f141",
+      "name": "Set Data",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        400,
+        900
+      ],
+      "parameters": {
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ffbf5f38-71e1-48cb-a1ff-8103616e2887",
+              "name": "company_name",
+              "type": "string",
+              "value": "AAAutomations"
+            },
+            {
+              "id": "bb214147-4456-4224-9ae1-1af71aad7a7d",
+              "name": "email_address",
+              "type": "string",
+              "value": "user@example.com"
+            },
+            {
+              "id": "3d1b7e87-1004-4a20-98b0-257fc5059fff",
+              "name": "company_info",
+              "type": "string",
+              "value": "At AAAutomations, we help legal professionals..."
+            },
+            {
+              "id": "f81f8de9-7d03-4e95-90a7-18b2a1fa73ad",
+              "name": "sender_name",
+              "type": "string",
+              "value": "Adam at AAAutomations"
+            }
+          ]
+        }
+      },
+      "typeVersion": 3.4
+    },
+    {
+      "id": "a0802c94-1b9c-44bf-a454-5a17ec5d0a85",
+      "name": "Generate Personalized Email",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [
+        560,
+        900
+      ],
+      "parameters": {
+        "text": "=INPUT:\n\nPerson:\n\n{{ $('Get LinkedIn Person').item.json.toJsonString() }}\n\nCompany:\n\n {{ $('Get LinkedIn Company').item.json.toJsonString() }}",
+        "batching": {},
+        "messages": {
+          "messageValues": [
+            {
+              "message": "## Context\n\nYour name is Dolly..."
+            }
+          ]
+        },
+        "promptType": "define",
+        "hasOutputParser": true
+      },
+      "typeVersion": 1.7
+    },
+    {
+      "id": "24c40f62-d345-477d-b8ae-a56b37f8df5a",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [
+        560,
+        1060
+      ],
+      "parameters": {
+        "model": "anthropic/claude-3.7-sonnet",
+        "options": {}
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "credential-id",
+          "name": "openRouterApi Credential"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "1ea7f29d-393f-4631-9dc7-ab37f1d93188",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "position": [
+        720,
+        1060
+      ],
+      "parameters": {
+        "jsonSchemaExample": "{\n\t\"subject\": \"...\",\n\t\"body\": \"...\"\n}"
+      },
+      "typeVersion": 1.2
+    },
+    {
+      "id": "6b3dc07d-0eb0-4017-b2d6-698b81996578",
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        900,
+        1060
+      ],
+      "parameters": {
+        "sendTo": "={{ $('Get Leads').item.json.Email }}",
+        "message": "={{ $json.output.body }}",
+        "options": {
+          "replyTo": "={{ $('Set Data').item.json.email_address }} ",
+          "senderName": "={{ $('Set Data').item.json.sender_name }}",
+          "appendAttribution": false
+        },
+        "subject": "={{ $json.output.subject }}",
+        "emailType": "text"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "credential-id",
+          "name": "gmailOAuth2 Credential"
+        }
+      },
+      "typeVersion": 2.1
+    },
+    {
+      "id": "SN_INTRO",
+      "name": "SN_INTRO",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -520,
+        -300
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 3,
+        "width": 460,
+        "height": 580,
+        "content": "## 🤖 LinkedIn Cold Outreach Bot\n\n### ¿Qué hace este workflow?\nAutomatiza el envío de emails de ventas hiperpersonalizados usando datos reales de LinkedIn de cada lead.\n\n### 🗂️ Flujo completo:\n1. Lee leads de Google Sheets\n2. Itera lead por lead\n3. Busca el perfil LinkedIn de la **persona** (via Google + Apify)\n4. Busca el perfil LinkedIn de su **empresa** (via Google + Apify)\n5. Claude/LLM redacta un email personalizado con esos datos\n6. Envía el email desde Gmail\n7. Vuelve al siguiente lead\n\n### 🔑 Credenciales necesarias:\n- **Apify** API Key → scraping LinkedIn\n- **Google Sheets** OAuth2 → leer leads\n- **OpenRouter** API Key → Claude 3.7 Sonnet\n- **Gmail** OAuth2 → enviar emails\n\n### ⚠️ Requisito importante:\nLa hoja de Google Sheets debe tener columnas:\n`First Name, Last Name, Company, Email`\n\n### 💰 Coste por lead (aprox):\n~0.10-0.30 USD en Apify + LLM calls"
+      }
+    },
+    {
+      "id": "SN_HEADER_A",
+      "name": "SN_HEADER_A",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -280,
+        -300
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 5,
+        "width": 840,
+        "height": 50,
+        "content": "## 📋 PARTE 1 — Carga y bucle de leads"
+      }
+    },
+    {
+      "id": "SN_HEADER_B",
+      "name": "SN_HEADER_B",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        380,
+        -300
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 4,
+        "width": 880,
+        "height": 50,
+        "content": "## 🔍 PARTE 2 — Búsqueda perfil LinkedIn de la PERSONA"
+      }
+    },
+    {
+      "id": "SN_HEADER_C",
+      "name": "SN_HEADER_C",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        380,
+        160
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 6,
+        "width": 1340,
+        "height": 50,
+        "content": "## 🏢 PARTE 3 — Búsqueda perfil LinkedIn de la EMPRESA"
+      }
+    },
+    {
+      "id": "SN_HEADER_D",
+      "name": "SN_HEADER_D",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        160,
+        780
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 2,
+        "width": 1060,
+        "height": 50,
+        "content": "## ✉️ PARTE 4 — Redacción y envío del email personalizado"
+      }
+    },
+    {
+      "id": "SN_TRIGGER",
+      "name": "SN_TRIGGER",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -280,
+        -240
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 200,
+        "height": 220,
+        "content": "### ▶️ Trigger Manual\n**Nodo:** `When clicking Execute`\n\nArranca el workflow manualmente.\n\nEn producción puedes sustituirlo por un **Schedule Trigger** (ej. lunes 9h) para enviar campañas de forma automática y recurrente."
+      }
+    },
+    {
+      "id": "SN_GETLEADS",
+      "name": "SN_GETLEADS",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -80,
+        -240
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 220,
+        "content": "### 📋 Lee los leads\n**Nodo:** `Get Leads`\n\nLee la hoja **\"Leads / Unprocessed\"** de Google Sheets.\n\n**Columnas esperadas:**\n- `First Name`\n- `Last Name`\n- `Company`\n- `Email`\n\n💡 Cuando un lead se procese, muévelo a otra pestaña para no repetirlo."
+      }
+    },
+    {
+      "id": "SN_LOOP",
+      "name": "SN_LOOP",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        120,
+        -240
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 220,
+        "content": "### 🔄 Bucle por lead\n**Nodo:** `Loop Over Items`\n\nItera de **1 en 1** sobre todos los leads.\n\n- **Salida 0** → fin del bucle (no quedan items)\n- **Salida 1** → procesa el siguiente lead\n\nAl terminar Gmail, el flujo vuelve aquí para continuar con el siguiente lead."
+      }
+    },
+    {
+      "id": "SN_SEARCH_PERSON",
+      "name": "SN_SEARCH_PERSON",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        380,
+        -240
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 240,
+        "height": 300,
+        "content": "### 🔎 Busca en Google la persona\n**Nodo:** `Google Search for Person LinkedIn`\n\nLlama a la API de **Apify** (`rag-web-browser`) para hacer una búsqueda Google:\n\n`\"Nombre Apellido Empresa site:linkedin.com\"`\n\n**maxResults:** 10 resultados devueltos\n\n`memory: 4096` / `timeout: 180` → actor Apify con 4GB RAM y 3min máximo."
+      }
+    },
+    {
+      "id": "SN_FILTER_PERSON",
+      "name": "SN_FILTER_PERSON",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        600,
+        -240
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 260,
+        "content": "### 🧹 Filtra URLs de personas\n**Nodo:** `Only People Links`\n\nRegEx para quedarse solo con URLs de **perfiles personales**:\n\n`linkedin.com/in/[slug]`\n\n**Descarta:** páginas de empresa, posts, grupos, etc.\n\n⚠️ Asume que el **primer resultado** que pasa el filtro es el correcto. Puede fallar con nombres muy comunes."
+      }
+    },
+    {
+      "id": "SN_AGG_PERSON",
+      "name": "SN_AGG_PERSON",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        800,
+        -240
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 200,
+        "height": 220,
+        "content": "### 📦 Agrupa resultados\n**Nodo:** `Aggregate`\n\nJunta todos los resultados filtrados en un único item bajo el campo `results`.\n\nEl nodo siguiente usa `results.first()` para tomar la URL más relevante."
+      }
+    },
+    {
+      "id": "SN_GET_PERSON",
+      "name": "SN_GET_PERSON",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        960,
+        -200
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 300,
+        "content": "### 👤 Scraping perfil LinkedIn\n**Nodo:** `Get LinkedIn Person`\n\nLlama al actor Apify `apimaestro~linkedin-profile-detail` pasando la URL del perfil.\n\n**Devuelve:** JSON completo con:\n- `basic_info` (nombre, titular, empresa actual, URL empresa)\n- `experience` (historial de empleos)\n- `education`\n- `certifications`\n- `languages`\n- `follower_count`\n\n`alwaysOutputData: true` → continúa aunque falle (evita bloquear el bucle)."
+      }
+    },
+    {
+      "id": "SN_IF_COMPANY",
+      "name": "SN_IF_COMPANY",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        380,
+        210
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 240,
+        "height": 260,
+        "content": "### ❓ ¿Tiene URL de empresa?\n**Nodo:** `Current Company Exists?`\n\nComprueba si el perfil de LinkedIn devolvió `basic_info.current_company_url`.\n\n**SÍ (salida 0)** → usa esa URL directamente → `Set Company URL`\n\n**NO (salida 1)** → busca en Google la empresa → `Google Search for Company LinkedIn`\n\nEsto ahorra una llamada a Apify cuando ya tenemos la URL de empresa."
+      }
+    },
+    {
+      "id": "SN_SET_URL_A",
+      "name": "SN_SET_URL_A",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1140,
+        270
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 200,
+        "content": "### 🔗 URL empresa (desde perfil)\n**Nodo:** `Set Company URL`\n\nExtrae `basic_info.current_company_url` del perfil de la persona y lo pone como `company_url` para pasarlo al actor de empresa.\n\nRuta cuando **ya tenemos** la URL."
+      }
+    },
+    {
+      "id": "SN_SEARCH_COMPANY",
+      "name": "SN_SEARCH_COMPANY",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        580,
+        550
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 230,
+        "height": 260,
+        "content": "### 🔎 Busca en Google la empresa\n**Nodo:** `Google Search for Company LinkedIn`\n\nIgual que la búsqueda de persona pero para la empresa:\n\n`\"NombreEmpresa site:linkedin.com\"`\n\nSolo 1 resultado es suficiente aquí, no se especifica `maxResults`."
+      }
+    },
+    {
+      "id": "SN_FILTER_COMPANY",
+      "name": "SN_FILTER_COMPANY",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        800,
+        550
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 240,
+        "content": "### 🧹 Filtra URLs de empresa\n**Nodo:** `Only Company Links`\n\nRegEx para quedarse solo con URLs de **páginas de empresa**:\n\n`linkedin.com/company/[slug]`\n\n**Descarta:** perfiles personales, posts, grupos, etc."
+      }
+    },
+    {
+      "id": "SN_AGG_COMPANY",
+      "name": "SN_AGG_COMPANY",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        980,
+        550
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 200,
+        "height": 200,
+        "content": "### 📦 Agrupa resultados\n**Nodo:** `Aggregate1`\n\nIgual que `Aggregate` de persona: junta resultados en `results` para tomar el primero."
+      }
+    },
+    {
+      "id": "SN_SET_URL_B",
+      "name": "SN_SET_URL_B",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1140,
+        500
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 200,
+        "content": "### 🔗 URL empresa (desde búsqueda)\n**Nodo:** `Set Company URL1`\n\nIgual que `Set Company URL` pero toma la URL del primer resultado de la búsqueda Google en vez del perfil de la persona.\n\nAmbos `Set Company URL` y `Set Company URL1` confluyen en `Get LinkedIn Company`."
+      }
+    },
+    {
+      "id": "SN_GET_COMPANY",
+      "name": "SN_GET_COMPANY",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1420,
+        480
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 300,
+        "content": "### 🏢 Scraping empresa LinkedIn\n**Nodo:** `Get LinkedIn Company`\n\nLlama al actor Apify `apimaestro~linkedin-company-detail` pasando la URL de la empresa.\n\n**Devuelve:** JSON completo con:\n- `basic_info` (nombre, descripción, web, industria, especialidades)\n- `stats` (empleados, seguidores)\n- `locations` (sede, oficinas)\n- `funding` (rondas de inversión)\n\nEsta info + el perfil de persona son el input del LLM para personalizar el email."
+      }
+    },
+    {
+      "id": "SN_SET_DATA",
+      "name": "SN_SET_DATA",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        160,
+        830
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 2,
+        "width": 240,
+        "height": 340,
+        "content": "### ✏️ CONFIGURA TU EMPRESA AQUÍ\n**Nodo:** `Set Data`\n\n⚠️ **Este es el nodo que debes personalizar** antes de usar el workflow.\n\n**Campos a editar:**\n- `company_name` → nombre de tu empresa\n- `email_address` → email del remitente (reply-to)\n- `sender_name` → nombre que aparecerá en el email\n- `company_info` → descripción larga de tu empresa, servicios y propuesta de valor\n\nEl LLM usa `company_info` para adaptar el email a cada lead según su perfil."
+      }
+    },
+    {
+      "id": "SN_LLM",
+      "name": "SN_LLM",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        400,
+        830
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 340,
+        "height": 420,
+        "content": "### 🤖 Genera el email personalizado\n**Nodo:** `Generate Personalized Email`\n\nLLM Chain que recibe:\n- JSON completo del perfil LinkedIn de la **persona**\n- JSON completo del perfil LinkedIn de la **empresa**\n- System prompt con las instrucciones de redacción\n\n**Output esperado (JSON):**\n```\n{\n  \"subject\": \"...\",\n  \"body\": \"...\"\n}\n```\n\n**Instrucciones del prompt:**\n- Tono conciso y casual (nivel 4º primaria)\n- Humor sarcástico y absurdo\n- Personalización real: menciona proyectos, logros concretos\n- Subject que invite a abrir\n- Evita mencionar empresas anteriores, habla del rol actual\n- Se presenta como \"Dolly, agente de lifecycle marketing\"\n\n**Sub-nodos:**\n- `OpenRouter Chat Model` → Claude 3.7 Sonnet\n- `Structured Output Parser` → fuerza output como JSON `{subject, body}`"
+      }
+    },
+    {
+      "id": "SN_OPENROUTER",
+      "name": "SN_OPENROUTER",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        400,
+        1030
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 220,
+        "content": "### 🧠 Modelo LLM\n**Nodo:** `OpenRouter Chat Model`\n\nUsa **Claude 3.7 Sonnet** vía OpenRouter.\n\nOpenRouter permite usar múltiples LLMs con una sola API Key.\n\n💡 Puedes cambiar el modelo a:\n- `openai/gpt-4o` (más rápido)\n- `google/gemini-2.0-flash` (más barato)"
+      }
+    },
+    {
+      "id": "SN_PARSER",
+      "name": "SN_PARSER",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        660,
+        1030
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 220,
+        "content": "### 📐 Parsea el output del LLM\n**Nodo:** `Structured Output Parser`\n\nFuerza al LLM a devolver siempre el mismo esquema JSON:\n\n```json\n{\n  \"subject\": \"...\",\n  \"body\": \"...\"\n}\n```\n\nSin esto, el LLM podría devolver el texto en distintos formatos y romper el nodo Gmail."
+      }
+    },
+    {
+      "id": "SN_GMAIL",
+      "name": "SN_GMAIL",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        860,
+        830
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 360,
+        "content": "### 📤 Envía el email\n**Nodo:** `Gmail`\n\nEnvía el email usando la cuenta de Gmail conectada.\n\n**Campos:**\n- `sendTo` → email del lead (de la hoja de Sheets)\n- `subject` → asunto generado por el LLM\n- `message` → cuerpo del email generado por el LLM\n- `senderName` → nombre del remitente (de `Set Data`)\n- `replyTo` → email de respuesta (de `Set Data`)\n\n⚠️ **Gmail tiene límites de envío:**\n- Cuenta gratuita: ~500 emails/día\n- Google Workspace: ~2000 emails/día\n\nTras enviar, el flujo vuelve al **Loop** para procesar el siguiente lead."
+      }
+    },
+    {
+      "id": "SN_TIPS",
+      "name": "SN_TIPS",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1160,
+        830
+      ],
+      "typeVersion": 1,
+      "parameters": {
+        "color": 6,
+        "width": 320,
+        "height": 420,
+        "content": "### 💡 Tips para mejorar el workflow\n\n**1. Marca leads como procesados**\nTras enviar el email, añade un nodo Google Sheets → Update Row para cambiar su estado a \"Enviado\" y evitar duplicados.\n\n**2. Añade un delay entre envíos**\nPara evitar que Gmail marque como spam, añade un nodo `Wait` de 30-60 segundos entre leads.\n\n**3. Gestiona errores**\nTodos los HTTP Requests tienen `onError: continueRegularOutput`. Añade un branch para loguear los fallos en otra pestaña.\n\n**4. Mejora el input**\nCuanto más específico sea tu `company_info`, mejores emails genera el LLM. Incluye casos de éxito, clientes, precios, URLs.\n\n**5. Añade seguimiento**\nIntegra un CRM (HubSpot, Pipedrive) para registrar los contactos automáticamente tras el envío."
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Personalized Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Get LinkedIn Person",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Leads": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate1": {
+      "main": [
+        [
+          {
+            "node": "Set Company URL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Google Search for Person LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Company URL": {
+      "main": [
+        [
+          {
+            "node": "Get LinkedIn Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Company URL1": {
+      "main": [
+        [
+          {
+            "node": "Get LinkedIn Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only People Links": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Company Links": {
+      "main": [
+        [
+          {
+            "node": "Aggregate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get LinkedIn Person": {
+      "main": [
+        [
+          {
+            "node": "Current Company Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get LinkedIn Company": {
+      "main": [
+        [
+          {
+            "node": "Set Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Personalized Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Current Company Exists?": {
+      "main": [
+        [
+          {
+            "node": "Set Company URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Search for Company LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Personalized Email",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Personalized Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Search for Person LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Only People Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Search for Company LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Only Company Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Get Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

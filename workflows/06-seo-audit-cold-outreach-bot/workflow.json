@@ -1,0 +1,1269 @@
+{
+  "name": "SEO Audit Cold Outreach Bot",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -360
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "set_config",
+      "name": "Set Búsqueda",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -360
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "// ⚠️ PERSONALIZA AQUÍ antes de ejecutar\nconst config = {\n  // Búsqueda de leads\n  nicho: \"clínica dental\",         // tipo de negocio\n  ciudad: \"Madrid\",                // ciudad / zona\n  max_leads: 10,                   // cuántas empresas buscar\n\n  // Tu agencia SEO\n  agency_name: \"TuAgencia SEO\",\n  agency_email: \"tu@email.com\",\n  sender_name: \"Tu Nombre\",\n  agency_info: `Somos una agencia SEO especializada en negocios locales.\nOfrecemos auditorías gratuitas y planes de posicionamiento desde 300€/mes.\nTrabajamos con más de 50 negocios en España con resultados medibles.\nWeb: https://tuagencia.com`,\n\n  // CTA del email\n  cta_url: \"https://tuagencia.com/auditoria-gratuita\",\n  cta_text: \"Solicitar auditoría gratuita\"\n};\n\n// Construye la query de búsqueda\nconfig.search_query = `${config.nicho} ${config.ciudad}`;\n\nreturn [{ json: config }];"
+      }
+    },
+    {
+      "id": "google_leads",
+      "name": "Google Search Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        -360
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~rag-web-browser/run-sync-get-dataset-items",
+        "method": "POST",
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{$json.search_query}}"
+            },
+            {
+              "name": "maxResults",
+              "value": "={{Number(20)}}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "180"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "Apify API Key"
+        }
+      }
+    },
+    {
+      "id": "filter_leads",
+      "name": "Filtrar leads válidos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        -360
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "// Filtra resultados que NO son webs propias de empresas\nconst excluded = [\n  'maps.google', 'yelp.com', 'tripadvisor', 'facebook.com',\n  'instagram.com', 'wikipedia', 'paginasamarillas', 'infobel',\n  'bing.com', 'google.com', 'youtube.com', 'twitter.com',\n  'linkedin.com', 'booking.com', 'trustpilot', 'hotfrog',\n  'guiacaminos', '11870', 'kompass'\n];\n\nconst results = [];\nfor (const item of $input.all()) {\n  const url = (item.json.searchResult?.url || item.json.url || '').toLowerCase();\n  if (!url) continue;\n  if (excluded.some(ex => url.includes(ex))) continue;\n  // Solo webs con dominio propio\n  if (!url.startsWith('http')) continue;\n  results.push({\n    json: {\n      url: item.json.searchResult?.url || item.json.url,\n      title: item.json.searchResult?.title || item.json.title || '',\n      snippet: item.json.searchResult?.description || item.json.snippet || ''\n    }\n  });\n}\nreturn results;"
+      }
+    },
+    {
+      "id": "limit_leads",
+      "name": "Limitar leads",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        -360
+      ],
+      "parameters": {
+        "maxItems": "={{$('Set Búsqueda').first().json.max_leads}}"
+      }
+    },
+    {
+      "id": "loop_leads",
+      "name": "Loop Over Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1300,
+        -360
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "scrape_web",
+      "name": "Scrape Web HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -40,
+        20
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~rag-web-browser/run-sync-get-dataset-items",
+        "method": "POST",
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{$json.url}}"
+            },
+            {
+              "name": "maxResults",
+              "value": "1"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "120"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "Apify API Key"
+        }
+      }
+    },
+    {
+      "id": "parse_seo",
+      "name": "Analizar SEO (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        20
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "// Analiza el HTML y extrae indicadores SEO\nconst html = $json.html || $json.content || '';\nconst url  = $json.url || $('Limitar leads').first()?.json?.url || '';\n\n// ── Helpers ──\nconst getTag = (html, tag, attr) => {\n  const re = new RegExp(`<${tag}[^>]*${attr ? `${attr}=\"([^\"]*)\"` : ''}[^>]*>([\\\\s\\\\S]*?)<\\\\/${tag}>`, 'i');\n  const m = html.match(re);\n  return m ? (attr ? m[1] : m[2] || m[1]).trim() : null;\n};\nconst getMeta = (html, name) => {\n  const re = new RegExp(`<meta[^>]*name=[\"']${name}[\"'][^>]*content=[\"']([^\"']*)[\"']`, 'i');\n  const re2 = new RegExp(`<meta[^>]*content=[\"']([^\"']*)[\"'][^>]*name=[\"']${name}[\"']`, 'i');\n  const m = html.match(re) || html.match(re2);\n  return m ? m[1].trim() : null;\n};\nconst countTags = (html, tag) => {\n  const re = new RegExp(`<${tag}[\\\\s>]`, 'gi');\n  return (html.match(re) || []).length;\n};\n\n// ── Extracción ──\nconst title = getTag(html, 'title', '') || '';\nconst metaDesc = getMeta(html, 'description') || '';\nconst metaRobots = getMeta(html, 'robots') || '';\n\nconst h1Count = countTags(html, 'h1');\nconst h2Count = countTags(html, 'h2');\nconst h3Count = countTags(html, 'h3');\nconst h1Match = html.match(/<h1[^>]*>([\\s\\S]*?)<\\/h1>/i);\nconst h1Text = h1Match ? h1Match[1].replace(/<[^>]+>/g, '').trim() : null;\n\nconst imgTotal = (html.match(/<img/gi) || []).length;\nconst imgNoAlt = (html.match(/<img(?![^>]*alt=)[^>]*>/gi) || []).length;\nconst imgNoAltPct = imgTotal > 0 ? Math.round((imgNoAlt / imgTotal) * 100) : 0;\n\nconst hasCanonical = /<link[^>]*rel=[\"']canonical[\"'][^>]*>/i.test(html);\nconst hasOG = /<meta[^>]*property=[\"']og:/i.test(html);\nconst hasSchema = html.includes('application/ld+json');\nconst hasViewport = html.includes('name=\"viewport\"');\n\n// Extrae links internos\nconst domain = url.replace(/^https?:\\/\\/([^\\/]+).*/, '$1');\nconst linkRe = /href=[\"'](https?:\\/\\/[^\"']+)[\"']/gi;\nlet linkMatch;\nconst internalLinks = [];\nwhile ((linkMatch = linkRe.exec(html)) !== null) {\n  if (linkMatch[1].includes(domain)) internalLinks.push(linkMatch[1]);\n  if (internalLinks.length >= 12) break;\n}\n\n// ── Fallos detectados ──\nconst fallos = [];\nif (!title) fallos.push({ severity: 'critical', issue: 'Falta el título (title tag)', detail: 'Sin title tag, Google no sabe cómo mostrarte en buscadores.' });\nelse if (title.length < 30) fallos.push({ severity: 'warning', issue: `Title demasiado corto (${title.length} chars)`, detail: `\"${title.substring(0,60)}\" — Lo ideal es 50-60 caracteres.` });\nelse if (title.length > 65) fallos.push({ severity: 'warning', issue: `Title demasiado largo (${title.length} chars)`, detail: `\"${title.substring(0,60)}...\" — Google lo recorta a 60 chars.` });\n\nif (!metaDesc) fallos.push({ severity: 'critical', issue: 'Falta la meta description', detail: 'Sin meta description no controlas cómo apareces en los resultados de búsqueda.' });\nelse if (metaDesc.length < 100) fallos.push({ severity: 'warning', issue: `Meta description corta (${metaDesc.length} chars)`, detail: 'Lo ideal es 150-160 caracteres para maximizar el CTR.' });\nelse if (metaDesc.length > 165) fallos.push({ severity: 'warning', issue: `Meta description demasiado larga (${metaDesc.length} chars)`, detail: 'Google la recorta, perdiendo el mensaje clave.' });\n\nif (h1Count === 0) fallos.push({ severity: 'critical', issue: 'No tiene etiqueta H1', detail: 'El H1 es la señal más importante para Google sobre de qué trata la página.' });\nelse if (h1Count > 1) fallos.push({ severity: 'warning', issue: `${h1Count} etiquetas H1 (debería haber solo 1)`, detail: `Tienes ${h1Count} H1 en la misma página, lo que confunde a Google.` });\n\nif (h2Count === 0) fallos.push({ severity: 'info', issue: 'Sin etiquetas H2', detail: 'Los H2 ayudan a estructurar el contenido para usuarios y buscadores.' });\n\nif (imgNoAlt > 0) fallos.push({ severity: 'warning', issue: `${imgNoAlt} imágenes sin texto alternativo (${imgNoAltPct}%)`, detail: 'Google no puede \"leer\" las imágenes sin alt text.' });\n\nif (!hasCanonical) fallos.push({ severity: 'info', issue: 'Sin canonical tag', detail: 'Sin canonical puedes tener problemas de contenido duplicado.' });\nif (!hasViewport) fallos.push({ severity: 'critical', issue: 'Sin meta viewport', detail: 'La web puede no estar optimizada para móviles.' });\nif (!hasOG) fallos.push({ severity: 'info', issue: 'Sin Open Graph tags', detail: 'Los posts en redes sociales no tendrán previsualización correcta.' });\n\nconst seo_score = Math.max(0, 100 - (fallos.filter(f=>f.severity==='critical').length * 20) - (fallos.filter(f=>f.severity==='warning').length * 10) - (fallos.filter(f=>f.severity==='info').length * 5));\n\nreturn [{\n  json: {\n    url,\n    title, metaDesc,\n    h1Count, h2Count, h3Count, h1Text,\n    imgTotal, imgNoAlt, imgNoAltPct,\n    hasCanonical, hasOG, hasSchema, hasViewport,\n    seo_score,\n    fallos,\n    internal_links_sample: internalLinks.slice(0,8)\n  }\n}];"
+      }
+    },
+    {
+      "id": "pagespeed",
+      "name": "PageSpeed Insights",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        590,
+        20
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "=https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={{encodeURIComponent($json.url)}}&strategy=mobile&key={{$env.PAGESPEED_API_KEY}}",
+        "options": {}
+      }
+    },
+    {
+      "id": "check_links",
+      "name": "Check Broken Links",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        20
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "// Comprueba los primeros 6 links internos encontrados\nconst links = $json.internal_links_sample || [];\nconst results = [];\nfor (const url of links.slice(0,6)) {\n  try {\n    // En n8n real usarías httpRequest en modo loop, aquí dejamos el array preparado\n    results.push({ url, status: 'pending_check' });\n  } catch(e) {\n    results.push({ url, status: 'error', error: e.message });\n  }\n}\nreturn [{ json: { ...$json, links_to_check: links.slice(0,6) } }];"
+      }
+    },
+    {
+      "id": "extract_contacts",
+      "name": "Extraer contactos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        480
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "// Extrae emails, teléfonos y redes sociales del HTML\nconst html = $json.html || $json.content || '';\nconst url  = $json.url || '';\n\n// Emails\nconst emailRe = /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;\nconst mailtoRe = /mailto:([^\"'\\s>]+)/gi;\nconst emails = new Set();\nlet m;\nwhile ((m = mailtoRe.exec(html)) !== null) emails.add(m[1].toLowerCase());\nconst allEmails = html.match(emailRe) || [];\nallEmails.forEach(e => {\n  if (!e.includes('.png') && !e.includes('.jpg') && !e.includes('example')) emails.add(e.toLowerCase());\n});\n\n// Filtra emails de sistema\nconst validEmails = [...emails].filter(e => !e.includes('noreply') && !e.includes('no-reply') && !e.includes('donotreply'));\n\n// Teléfonos (España)\nconst telRe = /(?:tel:|phone:|\\b)(\\+?34[\\s\\-]?)?([6789]\\d{2}[\\s\\-]?\\d{3}[\\s\\-]?\\d{3})\\b/g;\nconst phones = new Set();\nwhile ((m = telRe.exec(html.replace(/<[^>]+>/g, ' '))) !== null) {\n  const phone = m[0].replace(/tel:|phone:/i,'').trim().replace(/\\s+/g,' ');\n  if (phone.length >= 9) phones.add(phone.substring(0,20));\n}\n\n// Redes sociales\nconst social = {};\nconst fbM = html.match(/facebook\\.com\\/([^\"'\\/\\s?]+)/i);\nif (fbM) social.facebook = 'https://facebook.com/' + fbM[1];\nconst igM = html.match(/instagram\\.com\\/([^\"'\\/\\s?]+)/i);\nif (igM) social.instagram = 'https://instagram.com/' + igM[1];\nconst liM = html.match(/linkedin\\.com\\/company\\/([^\"'\\/\\s?]+)/i);\nif (liM) social.linkedin = 'https://linkedin.com/company/' + liM[1];\nconst twM = html.match(/(?:twitter|x)\\.com\\/([^\"'\\/\\s?]+)/i);\nif (twM) social.twitter = 'https://twitter.com/' + twM[1];\n\nreturn [{\n  json: {\n    ...$json,\n    contact: {\n      emails: validEmails.slice(0,3),\n      primary_email: validEmails[0] || null,\n      phones: [...phones].slice(0,3),\n      primary_phone: [...phones][0] || null,\n      social\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "search_li",
+      "name": "Google Search LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -40,
+        900
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~rag-web-browser/run-sync-get-dataset-items",
+        "method": "POST",
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{$json.title || $json.url}} site:linkedin.com/company"
+            },
+            {
+              "name": "maxResults",
+              "value": "3"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "120"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "Apify API Key"
+        }
+      }
+    },
+    {
+      "id": "filter_company",
+      "name": "Solo company links",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        250,
+        900
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": false,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              },
+              "leftValue": "={{$json.searchResult?.url || $json.url}}",
+              "rightValue": "linkedin\\.com\\/company\\/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get_li_company",
+      "name": "Get LinkedIn Company",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        900
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apimaestro~linkedin-company-detail/run-sync-get-dataset-items",
+        "method": "POST",
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "identifier",
+              "value": "={{[$json.searchResult?.url || $json.url]}}"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "120"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "credential-id",
+          "name": "Apify API Key"
+        }
+      }
+    },
+    {
+      "id": "merge_all",
+      "name": "Consolidar todo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        1320
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "// Consolida audit SEO + PageSpeed + contacto + LinkedIn en un solo item\nconst audit = $('Extraer contactos').first().json;\nconst config = $('Set Búsqueda').first().json;\n\n// PageSpeed data\nlet psData = {};\ntry {\n  const ps = $('PageSpeed Insights').first().json;\n  const cats = ps?.lighthouseResult?.categories;\n  const audits = ps?.lighthouseResult?.audits;\n  psData = {\n    performance: Math.round((cats?.performance?.score || 0) * 100),\n    lcp: audits?.['largest-contentful-paint']?.displayValue || 'N/A',\n    cls: audits?.['cumulative-layout-shift']?.displayValue || 'N/A',\n    fcp: audits?.['first-contentful-paint']?.displayValue || 'N/A',\n    speed_score_label: (cats?.performance?.score || 0) > 0.8 ? 'Buena' : (cats?.performance?.score || 0) > 0.5 ? 'Media' : 'Mala'\n  };\n} catch(e) { psData = { performance: null, note: 'No se pudo obtener' }; }\n\n// LinkedIn data\nlet liData = {};\ntry {\n  const li = $('Get LinkedIn Company').first().json;\n  liData = {\n    name: li?.basic_info?.name || '',\n    description: li?.basic_info?.description || '',\n    employees: li?.stats?.employee_count || null,\n    industry: li?.basic_info?.industries?.[0] || '',\n    specialties: (li?.basic_info?.specialties || []).slice(0,5)\n  };\n} catch(e) {}\n\n// Broken links\nlet brokenLinks = [];\ntry {\n  brokenLinks = $('Check Broken Links').all()\n    .map(i => i.json)\n    .filter(i => i.status >= 400 || i.error)\n    .map(i => ({ url: i.url, status: i.status || 'error' }));\n} catch(e) {}\n\n// ── Fallos totales para el email ──\nconst allFallos = [...(audit.fallos || [])];\nif (psData.performance !== null && psData.performance < 50) {\n  allFallos.unshift({ severity: 'critical', issue: `Velocidad web muy baja (${psData.performance}/100)`, detail: `Tu web tarda en cargar. El promedio del sector es 60+. Google penaliza webs lentas.` });\n} else if (psData.performance !== null && psData.performance < 75) {\n  allFallos.push({ severity: 'warning', issue: `Velocidad mejorable (${psData.performance}/100)`, detail: `LCP: ${psData.lcp}, CLS: ${psData.cls}` });\n}\nif (brokenLinks.length > 0) {\n  allFallos.push({ severity: 'warning', issue: `${brokenLinks.length} link(s) roto(s)`, detail: brokenLinks.slice(0,3).map(l => l.url).join(', ') });\n}\n\n// Elige top 3 fallos más impactantes para el email\nconst topFallos = [\n  ...allFallos.filter(f => f.severity === 'critical'),\n  ...allFallos.filter(f => f.severity === 'warning'),\n  ...allFallos.filter(f => f.severity === 'info')\n].slice(0, 3);\n\nreturn [{\n  json: {\n    url: audit.url,\n    seo_audit: audit,\n    pagespeed: psData,\n    broken_links: brokenLinks,\n    contact: audit.contact,\n    linkedin: liData,\n    config,\n    top_fallos: topFallos,\n    all_fallos_count: allFallos.length,\n    seo_score: audit.seo_score\n  }\n}];"
+      }
+    },
+    {
+      "id": "if_email",
+      "name": "¿Hay email de contacto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        300,
+        1320
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": false,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{$json.contact.primary_email}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gen_email",
+      "name": "Generate SEO Email",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        560,
+        1320
+      ],
+      "parameters": {
+        "text": "={{JSON.stringify($json)}}",
+        "promptType": "define",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "## Eres un consultor SEO que escribe emails de prospección a negocios locales.\n\n## TU MISIÓN:\nEscribir un email corto, directo y personalizado a una empresa para ofrecerles una auditoría SEO gratuita, mencionando problemas reales que has detectado en su web.\n\n## EMPRESA QUE CONTACTAS:\n- URL: {{ $json.url }}\n- Nombre: {{ $json.linkedin.name || $json.seo_audit.title }}\n- Industria: {{ $json.linkedin.industry }}\n\n## FALLOS SEO DETECTADOS (usa 2-3 de estos en el email):\n{{ $json.top_fallos.map((f, i) => `${i+1}. [${f.severity.toUpperCase()}] ${f.issue}: ${f.detail}`).join('\\n') }}\n\n## VELOCIDAD WEB:\n{{ $json.pagespeed.performance !== null ? `Score: ${$json.pagespeed.performance}/100 (${$json.pagespeed.speed_score_label})` : 'No disponible' }}\n\n## TU AGENCIA:\n- Nombre: {{ $json.config.agency_name }}\n- Email: {{ $json.config.agency_email }}\n- Info: {{ $json.config.agency_info }}\n- CTA URL: {{ $json.config.cta_url }}\n\n## INSTRUCCIONES PARA EL EMAIL:\n\n1. **Asunto**: Menciona el nombre de la empresa y un problema concreto. Ej: \"He revisado la web de [empresa] y encontré algo importante\"\n\n2. **Apertura**: Preséntate brevemente y di que revisaste su web específicamente.\n\n3. **Fallos (2-3 máximo)**: Menciona los problemas más impactantes con datos reales. Sé concreto, no genérico. Ej: \"Tu meta description tiene solo 45 caracteres cuando debería tener 150\" en lugar de \"tienes problemas SEO\".\n\n4. **Propuesta**: Ofrece una auditoría gratuita sin compromiso. Incluye el enlace CTA.\n\n5. **Cierre**: Breve, directo, firma con tu nombre.\n\n## REGLAS:\n- Máximo 150 palabras en el cuerpo\n- NO uses términos técnicos sin explicarlos brevemente\n- NO exageres el problema, sé honesto\n- Tono: profesional pero cercano, como si fueras un asesor de confianza\n- Idioma: español de España\n\n## OUTPUT:\nJSON con campos \"subject\" y \"body\". Solo JSON, nada más."
+            }
+          ]
+        },
+        "batching": {}
+      }
+    },
+    {
+      "id": "openrouter",
+      "name": "Claude 3.7 (OpenRouter)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        560,
+        1480
+      ],
+      "parameters": {
+        "model": "anthropic/claude-3.7-sonnet",
+        "options": {}
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "credential-id",
+          "name": "openRouterApi Credential"
+        }
+      }
+    },
+    {
+      "id": "parser",
+      "name": "Output Parser JSON",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        1480
+      ],
+      "parameters": {
+        "jsonSchemaExample": "{\"subject\": \"He revisado tu web y encontré algo importante\", \"body\": \"Hola...\"}"
+      }
+    },
+    {
+      "id": "gmail",
+      "name": "Gmail: Enviar email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        1320
+      ],
+      "parameters": {
+        "sendTo": "={{$json.output?.subject ? $('Consolidar todo').first().json.contact.primary_email : $('Consolidar todo').first().json.contact.primary_email}}",
+        "message": "={{$json.output.body}}",
+        "subject": "={{$json.output.subject}}",
+        "emailType": "text",
+        "options": {
+          "replyTo": "={{$('Set Búsqueda').first().json.agency_email}}",
+          "senderName": "={{$('Set Búsqueda').first().json.sender_name}}",
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "credential-id",
+          "name": "gmailOAuth2 Credential"
+        }
+      }
+    },
+    {
+      "id": "log_sheets",
+      "name": "Log en Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1140,
+        1320
+      ],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Resultados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{$('Consolidar todo').first().json.url}}",
+            "email_encontrado": "={{$('Consolidar todo').first().json.contact.primary_email || 'N/A'}}",
+            "score_seo": "={{$('Consolidar todo').first().json.seo_score}}",
+            "score_velocidad": "={{$('Consolidar todo').first().json.pagespeed.performance || 'N/A'}}",
+            "fallos_detectados": "={{$('Consolidar todo').first().json.all_fallos_count}}",
+            "email_enviado": "=SI",
+            "fecha": "={{new Date().toISOString().split('T')[0]}}"
+          },
+          "matchingColumns": [
+            "url"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "credential-id",
+          "name": "googleSheetsOAuth2Api Credential"
+        }
+      }
+    },
+    {
+      "id": "log_no_email",
+      "name": "Log sin email (no enviado)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        560,
+        1500
+      ],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Resultados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{$json.url}}",
+            "email_encontrado": "=NO ENCONTRADO",
+            "score_seo": "={{$json.seo_score || 'N/A'}}",
+            "email_enviado": "=NO",
+            "fecha": "={{new Date().toISOString().split('T')[0]}}"
+          },
+          "matchingColumns": [
+            "url"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "credential-id",
+          "name": "googleSheetsOAuth2Api Credential"
+        }
+      }
+    },
+    {
+      "id": "next_batch",
+      "name": "Siguiente lead",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1380,
+        1320
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "SN_INTRO",
+      "name": "SN_INTRO",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        -420
+      ],
+      "parameters": {
+        "color": 3,
+        "width": 520,
+        "height": 700,
+        "content": "## 🔍 SEO Audit Cold Outreach Bot\n\n### ¿Qué hace este workflow?\n1. **Genera leads** buscando empresas por nicho + ciudad en Google\n2. **Audita la web** de cada empresa (SEO on-page)\n3. **Busca contacto** (email, teléfono)\n4. **Busca LinkedIn** de la empresa\n5. **Redacta un email** personalizado con los fallos SEO encontrados\n6. **Lo envía** desde Gmail\n\n### 🗂️ Las 5 partes:\n- **PARTE 1** — Configuración y búsqueda de leads\n- **PARTE 2** — Scraping web + auditoría SEO\n- **PARTE 3** — Extracción de contactos\n- **PARTE 4** — LinkedIn de la empresa\n- **PARTE 5** — Redacción y envío del email\n\n### 🔑 Credenciales necesarias:\n- **Apify** API Key (scraping)\n- **Google PageSpeed** API Key (gratis en Google Cloud)\n- **OpenRouter** API Key (Claude 3.7)\n- **Gmail** OAuth2\n- **Google Sheets** OAuth2 (log de resultados)\n\n### ⚠️ Coste por lead (aprox):\n~0.15–0.40 USD (Apify + LLM)"
+      }
+    },
+    {
+      "id": "SN_H1",
+      "name": "SN_H1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -420
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 1100,
+        "height": 45,
+        "content": "## ⚙️ PARTE 1 — Generación de leads (busca empresas por nicho + ciudad en Google)"
+      }
+    },
+    {
+      "id": "SN_TRIGGER_NOTE",
+      "name": "SN_TRIGGER_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -360
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 280,
+        "content": "### ▶️ Trigger Manual\n**Nodo:** `Trigger`\n\nArranca el proceso manualmente.\n\nEn producción puedes usar un **Schedule Trigger** para ejecutarlo cada semana buscando nuevas empresas en tu nicho objetivo."
+      }
+    },
+    {
+      "id": "SN_CONFIG_NOTE",
+      "name": "SN_CONFIG_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        -360
+      ],
+      "parameters": {
+        "color": 2,
+        "width": 280,
+        "height": 340,
+        "content": "### ✏️ CONFIGURA AQUÍ TU BÚSQUEDA\n**Nodo:** `Set Búsqueda`\n\n⚠️ **Personaliza estos campos antes de usar:**\n\n- `nicho` → tipo de negocio a buscar\n  Ej: `\"clínica dental\"`, `\"fontanero\"`, `\"restaurante\"`\n\n- `ciudad` → dónde buscar\n  Ej: `\"Madrid\"`, `\"Barcelona 2025\"`\n\n- `max_leads` → cuántos leads sacar (1–20)\n\n- Tu empresa: nombre, email, info de servicios SEO\n\nEl nodo construye la query Google automáticamente."
+      }
+    },
+    {
+      "id": "SN_GOOGLE_LEADS_NOTE",
+      "name": "SN_GOOGLE_LEADS_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        500,
+        -360
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 280,
+        "content": "### 🔎 Busca empresas en Google\n**Nodo:** `Google Search Leads`\n\nUsa **Apify** (`rag-web-browser`) para hacer la búsqueda:\n\n`\"clínica dental Madrid\"`\n\nDevuelve hasta 15 resultados con URL, título y snippet.\n\nDescarta resultados de directorios (yelp, páginas amarillas, etc.) en el siguiente nodo."
+      }
+    },
+    {
+      "id": "SN_FILTER_LEADS_NOTE",
+      "name": "SN_FILTER_LEADS_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        780,
+        -360
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 280,
+        "content": "### 🧹 Filtra webs válidas\n**Nodo:** `Filtrar leads válidos`\n\nElimina resultados que NO son webs propias de empresas:\n\n- Sin `maps.google`\n- Sin `yelp.com`\n- Sin `tripadvisor`\n- Sin `facebook.com`\n- Sin `instagram.com`\n- Sin `wikipedia`\n- Sin `paginasamarillas`\n\nSolo quedan webs reales de empresas."
+      }
+    },
+    {
+      "id": "SN_LIMIT_NOTE",
+      "name": "SN_LIMIT_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        -360
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 240,
+        "content": "### ✂️ Limita cantidad\n**Nodo:** `Limitar leads`\n\nLimita los resultados al número definido en `max_leads` (por defecto 10) para controlar el gasto en Apify y LLM.\n\nSi tienes créditos de sobra, sube el límite."
+      }
+    },
+    {
+      "id": "SN_LOOP_NOTE",
+      "name": "SN_LOOP_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        -360
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 280,
+        "content": "### 🔄 Bucle por lead\n**Nodo:** `Loop Over Leads`\n\nProcesa cada empresa una a una.\n\n- **Salida 0** → se acabaron los leads (fin)\n- **Salida 1** → procesa el siguiente\n\nAl terminar de enviar el email, vuelve aquí para el siguiente lead."
+      }
+    },
+    {
+      "id": "SN_H2",
+      "name": "SN_H2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -40
+      ],
+      "parameters": {
+        "color": 4,
+        "width": 1080,
+        "height": 45,
+        "content": "## 🌐 PARTE 2 — Scraping web + Auditoría SEO"
+      }
+    },
+    {
+      "id": "SN_SCRAPE_NOTE",
+      "name": "SN_SCRAPE_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        20
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 270,
+        "height": 360,
+        "content": "### 📥 Descarga el HTML\n**Nodo:** `Scrape Web HTML`\n\nHace GET a la URL de la empresa con Apify (`rag-web-browser`).\n\nDevuelve el HTML completo de la homepage junto con el texto limpio.\n\n`onError: continueRegularOutput` → si la web falla (timeout, 404) el flujo no se rompe."
+      }
+    },
+    {
+      "id": "SN_PARSE_NOTE",
+      "name": "SN_PARSE_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        250,
+        20
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 320,
+        "height": 440,
+        "content": "### 🔬 Analiza la estructura SEO\n**Nodo:** `Analizar SEO (Code)`\n\nCódigo JS que parsea el HTML y extrae:\n\n**Meta tags:**\n- `<title>` → longitud ideal 50-60 chars\n- `<meta name=\"description\">` → ideal 150-160 chars\n\n**Estructura de headings:**\n- Cuenta cuántos H1, H2, H3 tiene\n- Detecta si hay más de 1 H1 (error SEO)\n- Detecta si falta H1\n- Extrae el texto del primer H1\n\n**Imágenes:**\n- % de imágenes sin `alt` text\n\n**Otros indicadores:**\n- Presencia de canonical tag\n- Open Graph tags (og:title, og:description)\n- Schema markup (JSON-LD)\n- Links internos vs externos\n\n**Output:** objeto `seo_audit` con todos los hallazgos + lista de `fallos` detectados."
+      }
+    },
+    {
+      "id": "SN_SPEED_NOTE",
+      "name": "SN_SPEED_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        590,
+        20
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 270,
+        "height": 340,
+        "content": "### ⚡ Core Web Vitals\n**Nodo:** `PageSpeed Insights API`\n\nLlama a la **Google PageSpeed Insights API** (gratis) pasando la URL.\n\n**Métricas obtenidas:**\n- `performance_score` (0-100)\n- `LCP` (Largest Contentful Paint)\n- `CLS` (Cumulative Layout Shift)\n- `FID/INP` (Interactividad)\n- `FCP` (First Contentful Paint)\n- `TBT` (Total Blocking Time)\n\nUmbral de alerta: score < 50 → problema grave"
+      }
+    },
+    {
+      "id": "SN_BROKEN_NOTE",
+      "name": "SN_BROKEN_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        20
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 270,
+        "height": 340,
+        "content": "### 🔗 Detecta links rotos\n**Nodo:** `Chequear links internos`\n\nExtrae hasta 10 links internos del HTML y hace HEAD request a cada uno.\n\nClasifica:\n- ✅ 200 → OK\n- ⚠️ 301/302 → redirección\n- ❌ 404 → roto\n- ❌ 500 → error servidor\n- ❌ Timeout → inaccesible\n\nAñade la lista de links rotos al audit."
+      }
+    },
+    {
+      "id": "SN_H3",
+      "name": "SN_H3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        420
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 760,
+        "height": 45,
+        "content": "## 📞 PARTE 3 — Extracción de contactos"
+      }
+    },
+    {
+      "id": "SN_CONTACT_NOTE",
+      "name": "SN_CONTACT_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        480
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 320,
+        "height": 320,
+        "content": "### 📇 Extrae info de contacto\n**Nodo:** `Extraer contactos (Code)`\n\nBusca en el HTML patrones de:\n\n**Email:**\n- `mailto:` links\n- RegEx de emails `[a-z]+@[a-z]+\\.[a-z]+`\n\n**Teléfono:**\n- `tel:` links\n- RegEx de teléfonos españoles (`+34`, `6xx`, `9xx`)\n\n**Redes sociales:**\n- LinkedIn, Twitter/X, Instagram, Facebook\n\n**Dirección:**\n- Etiquetas con `itemtype=\"PostalAddress\"` (Schema)\n- Texto cerca de \"dirección\", \"c/\", \"calle\"\n\nSi no encuentra email directo, busca la página `/contacto` o `/about`."
+      }
+    },
+    {
+      "id": "SN_CONTACT2_NOTE",
+      "name": "SN_CONTACT2_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        300,
+        480
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 280,
+        "height": 280,
+        "content": "### 🔍 Página de contacto\n**Nodo:** `Scrape página contacto`\n\nSi en la homepage no encontró email, intenta:\n\n1. Scrapea `{url}/contacto`\n2. Scrapea `{url}/contact`\n3. Scrapea `{url}/about`\n\nAplica el mismo extractor de emails al contenido obtenido.\n\nSi sigue sin encontrar email → marca como `no_email_found` pero sigue el flujo."
+      }
+    },
+    {
+      "id": "SN_H4",
+      "name": "SN_H4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        840
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 920,
+        "height": 45,
+        "content": "## 💼 PARTE 4 — LinkedIn de la empresa"
+      }
+    },
+    {
+      "id": "SN_LI_SEARCH_NOTE",
+      "name": "SN_LI_SEARCH_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        900
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 270,
+        "height": 280,
+        "content": "### 🔎 Busca empresa en LinkedIn\n**Nodo:** `Google Search LinkedIn`\n\nIgual que en el bot de outreach anterior:\n\n`\"Nombre empresa site:linkedin.com\"`\n\nUsa Apify `rag-web-browser`."
+      }
+    },
+    {
+      "id": "SN_LI_FILTER_NOTE",
+      "name": "SN_LI_FILTER_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        250,
+        900
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 230,
+        "height": 240,
+        "content": "### 🧹 Filtra URL de empresa\n**Nodo:** `Solo company links`\n\nRegEx para quedarse solo con:\n`linkedin.com/company/[slug]`\n\nDescarta perfiles personales."
+      }
+    },
+    {
+      "id": "SN_LI_GET_NOTE",
+      "name": "SN_LI_GET_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        500,
+        900
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 270,
+        "height": 280,
+        "content": "### 🏢 Datos LinkedIn empresa\n**Nodo:** `Get LinkedIn Company`\n\nApify `apimaestro~linkedin-company-detail`.\n\n**Obtiene:**\n- Descripción, industria, especialidades\n- Nº empleados, fundación\n- Sede y oficinas\n\nContexto para que el LLM personalice el email."
+      }
+    },
+    {
+      "id": "SN_H5",
+      "name": "SN_H5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        1260
+      ],
+      "parameters": {
+        "color": 2,
+        "width": 1060,
+        "height": 45,
+        "content": "## ✉️ PARTE 5 — Redacción y envío del email SEO"
+      }
+    },
+    {
+      "id": "SN_MERGE_NOTE",
+      "name": "SN_MERGE_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        1320
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 280,
+        "content": "### 🔗 Consolida toda la info\n**Nodo:** `Merge Audit + LinkedIn`\n\nJunta en un único item:\n- `seo_audit` (fallos on-page)\n- `pagespeed` (velocidad)\n- `broken_links` (links rotos)\n- `contact_info` (email, teléfono)\n- `linkedin_data` (empresa)\n\nTodo esto va como input al LLM para generar el email."
+      }
+    },
+    {
+      "id": "SN_LLM_NOTE",
+      "name": "SN_LLM_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        1320
+      ],
+      "parameters": {
+        "color": 2,
+        "width": 360,
+        "height": 380,
+        "content": "### 🤖 Redacta el email SEO\n**Nodo:** `Generate SEO Email`\n\n**Claude 3.7 Sonnet** vía OpenRouter.\n\n**El prompt instruye al LLM para:**\n\n1. Presentarse como consultor SEO\n2. Mencionar 2-3 problemas **concretos** encontrados:\n   - \"Tu H1 dice X, podrías mejorarlo con Y\"\n   - \"Tu velocidad es 34/100, el promedio del sector es 65\"\n   - \"Encontré 3 links rotos en tu web\"\n3. NO listar todos los problemas → elegir los más impactantes\n4. Proponer una **auditoría gratuita** como CTA\n5. Tono profesional pero cercano, sin ser agresivo\n\n**Output JSON:** `{subject, body}`"
+      }
+    },
+    {
+      "id": "SN_GMAIL_NOTE",
+      "name": "SN_GMAIL_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        620,
+        1320
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 240,
+        "height": 280,
+        "content": "### 📤 Envía el email\n**Nodo:** `Gmail`\n\nEnvía el email al contacto encontrado.\n\n**Si no hay email** → salta al siguiente lead sin enviar.\n\nTras enviar, loguea en Google Sheets:\n- URL analizada\n- Score SEO\n- Email enviado S/N\n- Fecha"
+      }
+    },
+    {
+      "id": "SN_LOG_NOTE",
+      "name": "SN_LOG_NOTE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        1320
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 240,
+        "height": 280,
+        "content": "### 📊 Registra en Google Sheets\n**Nodo:** `Log Resultados`\n\nGuarda una fila por cada lead procesado:\n\n- `url` de la web\n- `email_encontrado`\n- `score_pagespeed`\n- `h1_ok` (S/N)\n- `meta_ok` (S/N)\n- `links_rotos` (nº)\n- `email_enviado` (S/N)\n- `fecha`\n\nÚtil para seguimiento y evitar contactar dos veces."
+      }
+    },
+    {
+      "id": "SN_TIPS_FINAL",
+      "name": "SN_TIPS_FINAL",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        1260
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 320,
+        "height": 420,
+        "content": "### 💡 Tips para mejores resultados\n\n**1. Nicho específico = mejor tasa apertura**\n\"dentista Madrid centro\" > \"empresa Madrid\"\n\n**2. Limita a 5-10 leads/día**\nEvita que Gmail te marque como spam\n\n**3. Añade un delay entre envíos**\nNodo `Wait` de 30-60s entre emails\n\n**4. Personaliza el email por sector**\nCambia el tono según el sector (restaurantes vs clínicas)\n\n**5. Haz seguimiento**\nAñade una 2ª ejecución semanal que revise los leads sin respuesta y envíe un follow-up\n\n**6. Verifica emails antes de enviar**\nAñade verificación con Hunter.io o ZeroBounce para reducir bounces"
+      }
+    }
+  ],
+  "connections": {
+    "Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Búsqueda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Búsqueda": {
+      "main": [
+        [
+          {
+            "node": "Google Search Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Search Leads": {
+      "main": [
+        [
+          {
+            "node": "Filtrar leads válidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar leads válidos": {
+      "main": [
+        [
+          {
+            "node": "Limitar leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limitar leads": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Scrape Web HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Web HTML": {
+      "main": [
+        [
+          {
+            "node": "Analizar SEO (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analizar SEO (Code)": {
+      "main": [
+        [
+          {
+            "node": "PageSpeed Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PageSpeed Insights": {
+      "main": [
+        [
+          {
+            "node": "Check Broken Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Broken Links": {
+      "main": [
+        [
+          {
+            "node": "Extraer contactos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer contactos": {
+      "main": [
+        [
+          {
+            "node": "Google Search LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Search LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Solo company links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solo company links": {
+      "main": [
+        [
+          {
+            "node": "Get LinkedIn Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get LinkedIn Company": {
+      "main": [
+        [
+          {
+            "node": "Consolidar todo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar todo": {
+      "main": [
+        [
+          {
+            "node": "¿Hay email de contacto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay email de contacto?": {
+      "main": [
+        [
+          {
+            "node": "Generate SEO Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log sin email (no enviado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate SEO Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Enviar email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude 3.7 (OpenRouter)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate SEO Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser JSON": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate SEO Email",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Enviar email": {
+      "main": [
+        [
+          {
+            "node": "Log en Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log en Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Siguiente lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log sin email (no enviado)": {
+      "main": [
+        [
+          {
+            "node": "Siguiente lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siguiente lead": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

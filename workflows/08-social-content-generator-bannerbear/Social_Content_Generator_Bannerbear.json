@@ -1,0 +1,1037 @@
+{
+  "name": "Social Content Generator — Bannerbear + Claude",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Trigger Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -340
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "get_clients",
+      "name": "Get Clientes",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        220,
+        -340
+      ],
+      "parameters": {
+        "options": {},
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Clientes"
+        },
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SHEET_ID"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cred-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "id": "filter_active",
+      "name": "Filtrar activos",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -340
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": false,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{$json.activo}}",
+              "rightValue": "SI"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "loop_clients",
+      "name": "Loop Clientes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        720,
+        -340
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "scrape_web",
+      "name": "Scrape Web",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -40,
+        20
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~rag-web-browser/run-sync-get-dataset-items",
+        "method": "POST",
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{$json.url}}"
+            },
+            {
+              "name": "maxResults",
+              "value": "1"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "120"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cred-apify",
+          "name": "Apify API Key"
+        }
+      }
+    },
+    {
+      "id": "clean_html",
+      "name": "Limpiar HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        20
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "const items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const raw = item.json?.pageContent || item.json?.text || JSON.stringify(item.json);\n  const clean = raw\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .substring(0, 2000);\n  out.push({ json: { ...item.json, web_content: clean } });\n}\nreturn out.length ? out : [{ json: { web_content: 'Sin contenido' } }];"
+      }
+    },
+    {
+      "id": "search_trends",
+      "name": "Buscar Tendencias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        530,
+        20
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~rag-web-browser/run-sync-get-dataset-items",
+        "method": "POST",
+        "sendBody": true,
+        "sendQuery": true,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "=tendencias {{$('Loop Clientes').first().json.nicho}} 2025 España"
+            },
+            {
+              "name": "maxResults",
+              "value": "3"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "memory",
+              "value": "4096"
+            },
+            {
+              "name": "timeout",
+              "value": "120"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cred-apify",
+          "name": "Apify API Key"
+        }
+      }
+    },
+    {
+      "id": "pick_type",
+      "name": "Tipo de post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        20
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "const day = new Date().getDay();\nconst tipos = {\n  0: { tipo: 'branding',   instruccion: 'Crea un post de branding que transmita los valores y personalidad del negocio.' },\n  1: { tipo: 'tip',        instruccion: 'Crea un post con un consejo práctico útil para los clientes del negocio.' },\n  2: { tipo: 'dato',       instruccion: 'Crea un post con un dato curioso o estadística sorprendente del sector.' },\n  3: { tipo: 'tendencia',  instruccion: 'Crea un post sobre una tendencia actual del sector basándote en las noticias recientes.' },\n  4: { tipo: 'tip',        instruccion: 'Crea un post con un consejo práctico útil para los clientes del negocio.' },\n  5: { tipo: 'dato',       instruccion: 'Crea un post con un dato curioso o estadística sorprendente del sector.' },\n  6: { tipo: 'tendencia',  instruccion: 'Crea un post sobre una tendencia actual del sector basándote en las noticias recientes.' },\n};\nconst t = tipos[day];\nconst hoy = new Date().toISOString().split('T')[0];\nconst cliente = $('Loop Clientes').first().json;\n\n// Agrega tendencias como texto\nconst trendsItems = $input.all();\nconst trendsText = trendsItems\n  .map(i => i.json?.searchResult?.description || i.json?.snippet || '')\n  .filter(Boolean)\n  .join(' | ')\n  .substring(0, 800);\n\nreturn [{\n  json: {\n    ...cliente,\n    web_content: $('Limpiar HTML').first().json.web_content,\n    tendencias_texto: trendsText || 'No disponible',\n    post_tipo: t.tipo,\n    post_instruccion: t.instruccion,\n    fecha_hoy: hoy\n  }\n}];"
+      }
+    },
+    {
+      "id": "gen_copy",
+      "name": "Generate Copy",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -40,
+        380
+      ],
+      "parameters": {
+        "text": "={{JSON.stringify($json)}}",
+        "promptType": "define",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Eres un experto en redes sociales para negocios locales españoles. Generas contenido auténtico, no genérico.\n\n## CLIENTE:\n- Nombre: {{ $json.nombre }}\n- Nicho: {{ $json.nicho }}\n- Web (resumen): {{ $json.web_content }}\n\n## TENDENCIAS ACTUALES DEL SECTOR:\n{{ $json.tendencias_texto }}\n\n## TAREA:\n{{ $json.post_instruccion }}\n\n## REGLAS:\n- Texto del post: máximo 150 palabras\n- Primera línea: gancho que enganche (pregunta, dato impactante, o afirmación)\n- Final: llamada a la acción corta\n- Tono: extráelo de la descripción de la web del cliente\n- Nada de sonar a robot o IA\n- Idioma: español de España (no neutro)\n- bannerbear_title: máximo 5 palabras, impacta\n- bannerbear_subtitle: máximo 8 palabras, complementa\n- nombre_archivo: slug en minúsculas sin espacios, ej: clinica-lopez-tip-2025-01-20\n- hashtags: 10-12, mezcla populares y de nicho\n\n## SOLO DEVUELVE JSON (sin explicaciones, sin ```):\n{\n  \"titulo\": \"...\",\n  \"texto_post\": \"...\",\n  \"hashtags\": \"#tag1 #tag2...\",\n  \"bannerbear_title\": \"...\",\n  \"bannerbear_subtitle\": \"...\",\n  \"nombre_archivo\": \"...\"\n}"
+            }
+          ]
+        },
+        "batching": {}
+      }
+    },
+    {
+      "id": "openrouter",
+      "name": "Claude 3.7 (OpenRouter)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        320,
+        480
+      ],
+      "parameters": {
+        "model": "anthropic/claude-3.7-sonnet",
+        "options": {}
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "cred-or",
+          "name": "openRouterApi Credential"
+        }
+      }
+    },
+    {
+      "id": "parser",
+      "name": "Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        480
+      ],
+      "parameters": {
+        "jsonSchemaExample": "{\"titulo\": \"3 errores dentales\", \"texto_post\": \"¿Sabías que...\", \"hashtags\": \"#dental\", \"bannerbear_title\": \"Tu sonrisa importa\", \"bannerbear_subtitle\": \"Cuídala cada día\", \"nombre_archivo\": \"clinica-lopez-tip-2025-01-20\"}"
+      }
+    },
+    {
+      "id": "bb_create",
+      "name": "Bannerbear: Crear imagen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -40,
+        780
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.bannerbear.com/v2/images",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{\nJSON.stringify({\n  template: $('Loop Clientes').first().json.bannerbear_template,\n  modifications: [\n    { name: 'title', text: $json.output.bannerbear_title },\n    { name: 'subtitle', text: $json.output.bannerbear_subtitle },\n    { name: 'logo', image_url: $('Loop Clientes').first().json.logo_url || '' }\n  ]\n})\n}}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cred-bb",
+          "name": "Bannerbear API Key"
+        }
+      }
+    },
+    {
+      "id": "poll_bb",
+      "name": "Polling Bannerbear",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        780
+      ],
+      "parameters": {
+        "language": "JavaScript",
+        "jsCode": "const imageId = $json.uid || $json.id;\nconst apiKey = $env.BANNERBEAR_API_KEY;\nconst maxAttempts = 15;\nlet imageUrl = null;\n\nfor (let i = 0; i < maxAttempts; i++) {\n  const res = await $helpers.httpRequest({\n    method: 'GET',\n    url: `https://api.bannerbear.com/v2/images/${imageId}`,\n    headers: { Authorization: `Bearer ${apiKey}` }\n  });\n  if (res.status === 'generated') {\n    imageUrl = res.image_url_png || res.image_url;\n    break;\n  }\n  await new Promise(r => setTimeout(r, 2000));\n}\n\nif (!imageUrl) throw new Error('Bannerbear timeout');\nreturn [{ json: { ...$json, bannerbear_image_url: imageUrl } }];"
+      }
+    },
+    {
+      "id": "download_img",
+      "name": "Descargar imagen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        780
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "={{$json.bannerbear_image_url}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "drive_upload",
+      "name": "Subir a Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -40,
+        1160
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "upload",
+        "name": "={{$('Generate Copy').first().json.output.nombre_archivo}}.png",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "MyDrive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{$('Loop Clientes').first().json.drive_folder_id}}"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "cred-drive",
+          "name": "Google Drive"
+        }
+      }
+    },
+    {
+      "id": "log_sheets",
+      "name": "Log en Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        340,
+        1160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Historial"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cliente": "={{$('Loop Clientes').first().json.nombre}}",
+            "tipo_post": "={{$('Tipo de post').first().json.post_tipo}}",
+            "titulo": "={{$('Generate Copy').first().json.output.bannerbear_title}}",
+            "texto_post": "={{$('Generate Copy').first().json.output.texto_post}}",
+            "hashtags": "={{$('Generate Copy').first().json.output.hashtags}}",
+            "imagen_drive_url": "={{$json.webViewLink || ''}}",
+            "estado": "PENDIENTE",
+            "fecha": "={{new Date().toISOString().split('T')[0]}}"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cred-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "id": "notify",
+      "name": "Notificar por email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        1160
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "sendTo": "={{$env.NOTIFY_EMAIL}}",
+        "subject": "✅ Posts generados para {{$('Loop Clientes').first().json.nombre}}",
+        "message": "El post de hoy ({{$('Tipo de post').first().json.post_tipo}}) está listo en Drive para revisar.",
+        "emailType": "text",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "cred-gmail",
+          "name": "Gmail"
+        }
+      }
+    },
+    {
+      "id": "next",
+      "name": "Siguiente cliente",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        940,
+        1160
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "SN_INTRO",
+      "name": "SN_INTRO",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -400
+      ],
+      "parameters": {
+        "color": 3,
+        "width": 540,
+        "height": 660,
+        "content": "## 📱 Social Content Generator\n\n### ¿Qué hace este workflow?\nGenera posts completos (imagen + copy) para múltiples clientes y los guarda listos para revisar y publicar cuando quieras.\n\n**Flujo:**\n1. Lee clientes desde Google Sheets\n2. Scrapea la web de cada cliente\n3. Busca tendencias actuales del nicho\n4. Claude redacta el copy + hashtags\n5. Bannerbear genera la imagen con la plantilla\n6. Guarda la imagen en Google Drive\n7. Registra todo en Sheets (imagen, texto, hashtags)\n\n### 📋 Hoja \"Clientes\" — columnas:\n| Campo | Ejemplo |\n|---|---|\n| `nombre` | Clínica Dental López |\n| `url` | https://clinica.com |\n| `nicho` | clínica dental |\n| `bannerbear_template` | tmpl_abc123 |\n| `logo_url` | https://... |\n| `drive_folder_id` | 1aBcDeFg... |\n| `activo` | SI |\n\n### 🔑 Credenciales necesarias:\n- **Apify** (scraping + búsquedas)\n- **OpenRouter** (Claude 3.7)\n- **Bannerbear** API Key\n- **Google Drive** OAuth2\n- **Google Sheets** OAuth2\n\n### 💡 El flujo de trabajo ideal:\n1. Ejecuta el workflow (manual o Schedule)\n2. Revisa los posts generados en el Drive\n3. Aprueba o edita lo que necesites\n4. Publicas manualmente o activas otro workflow de publicación"
+      }
+    },
+    {
+      "id": "SN_H1",
+      "name": "SN_H1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -400
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 920,
+        "height": 45,
+        "content": "## ⚙️ PARTE 1 — Carga de clientes"
+      }
+    },
+    {
+      "id": "SN_H2",
+      "name": "SN_H2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -100
+      ],
+      "parameters": {
+        "color": 4,
+        "width": 1060,
+        "height": 45,
+        "content": "## 🌐 PARTE 2 — Investigación: web + tendencias del nicho"
+      }
+    },
+    {
+      "id": "SN_H3",
+      "name": "SN_H3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        320
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 800,
+        "height": 45,
+        "content": "## ✍️ PARTE 3 — Generación de copy con Claude"
+      }
+    },
+    {
+      "id": "SN_H4",
+      "name": "SN_H4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        720
+      ],
+      "parameters": {
+        "color": 2,
+        "width": 820,
+        "height": 45,
+        "content": "## 🎨 PARTE 4 — Creación de imagen con Bannerbear"
+      }
+    },
+    {
+      "id": "SN_H5",
+      "name": "SN_H5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        1100
+      ],
+      "parameters": {
+        "color": 4,
+        "width": 900,
+        "height": 45,
+        "content": "## 💾 PARTE 5 — Guardado en Drive + registro en Sheets"
+      }
+    },
+    {
+      "id": "SN_TRIGGER",
+      "name": "SN_TRIGGER",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -340
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 260,
+        "content": "### ▶️ Trigger\n**Nodo:** `Trigger Manual / Schedule`\n\nPor defecto es **manual** para que puedas probar.\n\nCuando esté todo listo, cámbialo por un **Schedule Trigger** para que se ejecute automáticamente (ej. lunes y jueves a las 9h)."
+      }
+    },
+    {
+      "id": "SN_SHEETS",
+      "name": "SN_SHEETS",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        -340
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 240,
+        "height": 260,
+        "content": "### 📋 Lee la lista de clientes\n**Nodo:** `Get Clientes`\n\nLee la hoja **\"Clientes\"** de tu Google Sheets.\n\nSolo necesitas rellenar la hoja con los datos de cada cliente. El workflow hace el resto automáticamente para cada uno."
+      }
+    },
+    {
+      "id": "SN_FILTER",
+      "name": "SN_FILTER",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -340
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 240,
+        "content": "### ✅ Solo clientes activos\n**Nodo:** `Filtrar activos`\n\nFiltra solo filas con `activo = SI`.\n\nAsí puedes pausar un cliente temporalmente sin borrarlo de la hoja."
+      }
+    },
+    {
+      "id": "SN_LOOP",
+      "name": "SN_LOOP",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -340
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 220,
+        "height": 260,
+        "content": "### 🔄 Bucle por cliente\n**Nodo:** `Loop Clientes`\n\nProcesa cada cliente de uno en uno.\n\nAl terminar de guardar en Drive y Sheets, vuelve aquí para continuar con el siguiente."
+      }
+    },
+    {
+      "id": "SN_SCRAPE",
+      "name": "SN_SCRAPE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -40
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 300,
+        "content": "### 🌐 Scrapea la web del cliente\n**Nodo:** `Scrape Web`\n\nUsa Apify para descargar el contenido de la web.\n\n**Extrae hasta 2000 caracteres** de texto limpio: descripción del negocio, servicios, tono de comunicación.\n\nEsto hace que el copy sea específico a ese negocio, no genérico."
+      }
+    },
+    {
+      "id": "SN_EXTRACT",
+      "name": "SN_EXTRACT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -40
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 270,
+        "height": 280,
+        "content": "### 🧹 Extrae texto limpio\n**Nodo:** `Limpiar HTML (Code)`\n\nElimina todo el HTML y se queda solo con el texto visible.\n\nLimita a 2000 caracteres para no desperdiciar tokens del LLM con contenido irrelevante."
+      }
+    },
+    {
+      "id": "SN_TRENDS",
+      "name": "SN_TRENDS",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        530,
+        -40
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 270,
+        "height": 300,
+        "content": "### 📈 Tendencias actuales del nicho\n**Nodo:** `Buscar Tendencias`\n\nBúsqueda web en tiempo real:\n`\"tendencias [nicho] 2025 España\"`\n\nDevuelve titulares y resúmenes de las últimas noticias del sector.\n\nPermite que los posts hablen de temas actuales, no siempre lo mismo."
+      }
+    },
+    {
+      "id": "SN_TYPE",
+      "name": "SN_TYPE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        820,
+        -40
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 300,
+        "content": "### 🎲 Tipo de post del día\n**Nodo:** `Tipo de post (Code)`\n\nRota automáticamente según el día:\n\n- **Lun/Jue** → Consejo práctico (tip)\n- **Mar/Vie** → Dato curioso / estadística\n- **Mié/Sáb** → Tendencia actual del sector\n- **Dom** → Post de branding / valores\n\nLa cuenta no repite siempre el mismo formato."
+      }
+    },
+    {
+      "id": "SN_COPY",
+      "name": "SN_COPY",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        380
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 340,
+        "height": 380,
+        "content": "### 🤖 Claude genera el copy\n**Nodo:** `Generate Copy`\n\nClaude recibe toda la info y genera:\n\n```json\n{\n  \"titulo\": \"3 errores comunes al...\",\n  \"texto_post\": \"¿Sabías que el 70%...\",\n  \"hashtags\": \"#dental #salud...\",\n  \"bannerbear_title\": \"Tu sonrisa importa\",\n  \"bannerbear_subtitle\": \"Cuídala cada día\",\n  \"nombre_archivo\": \"clinica-lopez-tip-2025-01-20\"\n}\n```\n\n**Reglas del prompt:**\n- Máx 150 palabras en el post\n- Tono extraído de la web del cliente\n- Gancho en la primera línea\n- CTA al final\n- 10-15 hashtags relevantes"
+      }
+    },
+    {
+      "id": "SN_MODEL",
+      "name": "SN_MODEL",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        320,
+        480
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 230,
+        "height": 200,
+        "content": "### 🧠 Claude 3.7 Sonnet\n**Nodo:** `OpenRouter Model`\n\nModelo vía OpenRouter.\n\n💡 Alternativas más baratas para alto volumen:\n- `google/gemini-2.0-flash`\n- `openai/gpt-4o-mini`"
+      }
+    },
+    {
+      "id": "SN_PARSE",
+      "name": "SN_PARSE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        480
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 230,
+        "height": 200,
+        "content": "### 📐 JSON Parser\n**Nodo:** `Output Parser`\n\nFuerza a Claude a devolver siempre el mismo esquema JSON.\n\nSin esto, el LLM a veces añade texto extra antes del JSON y rompe el flujo."
+      }
+    },
+    {
+      "id": "SN_BB",
+      "name": "SN_BB",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        780
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 320,
+        "height": 340,
+        "content": "### 🎨 Bannerbear genera la imagen\n**Nodo:** `Bannerbear: Crear imagen`\n\nLlama a la API de Bannerbear con:\n- `template` → ID de la plantilla del cliente (desde Sheets)\n- `title` → título generado por Claude\n- `subtitle` → subtítulo generado por Claude\n- `logo` → URL del logo del cliente (desde Sheets)\n\nBannerbear rellena la plantilla y devuelve una URL de imagen PNG."
+      }
+    },
+    {
+      "id": "SN_WAIT",
+      "name": "SN_WAIT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        340,
+        780
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 240,
+        "height": 280,
+        "content": "### ⏳ Espera la imagen\n**Nodo:** `Polling Bannerbear (Code)`\n\nBannerbear es **asíncrono**: la imagen no está lista al instante.\n\nEste código hace polling cada 2 segundos hasta que el estado sea `generated`.\n\nTimeout máximo: 30 segundos (15 intentos)."
+      }
+    },
+    {
+      "id": "SN_DL",
+      "name": "SN_DL",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        600,
+        780
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 240,
+        "height": 260,
+        "content": "### 📥 Descarga la imagen\n**Nodo:** `Descargar imagen`\n\nDescarga el PNG de Bannerbear como binario para poder subirlo a Google Drive directamente."
+      }
+    },
+    {
+      "id": "SN_DRIVE",
+      "name": "SN_DRIVE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        1160
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 280,
+        "height": 300,
+        "content": "### 📁 Guarda en Google Drive\n**Nodo:** `Subir a Drive`\n\nSube la imagen PNG a la carpeta del cliente en Drive.\n\n**Nombre del archivo:** usa el campo `nombre_archivo` generado por Claude → ej: `clinica-lopez-tip-2025-01-20.png`\n\nCada cliente tiene su propia carpeta (`drive_folder_id` en Sheets)."
+      }
+    },
+    {
+      "id": "SN_LOG",
+      "name": "SN_LOG",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        340,
+        1160
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 300,
+        "height": 340,
+        "content": "### 📊 Registra en Sheets\n**Nodo:** `Log en Sheets`\n\nAñade una fila en la hoja **\"Historial\"**:\n\n| Campo | Valor |\n|---|---|\n| cliente | Clínica López |\n| tipo_post | tip |\n| titulo | 3 errores... |\n| texto | ¿Sabías que... |\n| hashtags | #dental... |\n| imagen_drive_url | https://drive... |\n| fecha | 2025-01-20 |\n| estado | PENDIENTE |\n\nEl estado **PENDIENTE** indica que está listo para revisar y publicar."
+      }
+    },
+    {
+      "id": "SN_NOTIFY",
+      "name": "SN_NOTIFY",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        660,
+        1160
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 260,
+        "height": 280,
+        "content": "### 🔔 Notificación (opcional)\n**Nodo:** `Notificar por email / Slack`\n\nCuando todos los posts están listos, envía una notificación:\n\n*\"Se han generado X posts. Revísalos en Drive antes de publicar.\"*\n\n💡 Puedes usar Gmail, Slack, Telegram o cualquier app de mensajería que tengas conectada."
+      }
+    },
+    {
+      "id": "SN_TIPS",
+      "name": "SN_TIPS",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        960,
+        1100
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 300,
+        "height": 400,
+        "content": "### 💡 Tips para mejores resultados\n\n**1. Plantillas Bannerbear**\nCrea 2-3 plantillas distintas por cliente y alterna entre ellas para que el feed no se vea repetitivo\n\n**2. Carpetas en Drive**\nUna carpeta por cliente, subcarpeta por mes. Organiza así: `Drive / NombreCliente / 2025-01 /`\n\n**3. Flujo de aprobación**\nCambia el estado en Sheets de PENDIENTE → APROBADO cuando revises, y luego activa un 2º workflow que publique solo los APROBADOS\n\n**4. Feedback al prompt**\nSi el copy no convence, añade ejemplos de posts buenos en el system prompt. Claude aprende del ejemplo.\n\n**5. Genera por lotes**\nEjecuta el workflow el lunes generando 5 posts de golpe (uno por tipo), y programa las publicaciones para toda la semana"
+      }
+    }
+  ],
+  "connections": {
+    "Trigger Manual": {
+      "main": [
+        [
+          {
+            "node": "Get Clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Clientes": {
+      "main": [
+        [
+          {
+            "node": "Filtrar activos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar activos": {
+      "main": [
+        [
+          {
+            "node": "Loop Clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Clientes": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Scrape Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Web": {
+      "main": [
+        [
+          {
+            "node": "Limpiar HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpiar HTML": {
+      "main": [
+        [
+          {
+            "node": "Buscar Tendencias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Tendencias": {
+      "main": [
+        [
+          {
+            "node": "Tipo de post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de post": {
+      "main": [
+        [
+          {
+            "node": "Generate Copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude 3.7 (OpenRouter)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Copy",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Copy",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Copy": {
+      "main": [
+        [
+          {
+            "node": "Bannerbear: Crear imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bannerbear: Crear imagen": {
+      "main": [
+        [
+          {
+            "node": "Polling Bannerbear",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Polling Bannerbear": {
+      "main": [
+        [
+          {
+            "node": "Descargar imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar imagen": {
+      "main": [
+        [
+          {
+            "node": "Subir a Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir a Drive": {
+      "main": [
+        [
+          {
+            "node": "Log en Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log en Sheets": {
+      "main": [
+        [
+          {
+            "node": "Notificar por email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificar por email": {
+      "main": [
+        [
+          {
+            "node": "Siguiente cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siguiente cliente": {
+      "main": [
+        [
+          {
+            "node": "Loop Clientes",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
